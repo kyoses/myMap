@@ -1,0 +1,252 @@
+package com.example.mymap.map;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.util.Log;
+import android.view.View;
+
+import com.baidu.navisdk.adapter.BNaviCommonParams;
+import com.baidu.navisdk.adapter.BNRoutePlanNode;
+import com.baidu.navisdk.adapter.BaiduNaviManagerFactory;
+import com.baidu.navisdk.adapter.IBaiduNaviManager;
+import com.baidu.navisdk.adapter.IBNLicenseListener;
+import com.baidu.navisdk.adapter.IBNaviListener;
+import com.baidu.navisdk.adapter.IBNaviViewListener;
+import com.baidu.navisdk.adapter.IBNRouteGuideManager;
+import com.baidu.navisdk.adapter.IBNRoutePlanManager;
+import com.baidu.navisdk.adapter.struct.BNGuideConfig;
+import com.baidu.navisdk.adapter.struct.BNaviInitConfig;
+import com.baidu.navisdk.adapter.struct.BNRoutePlanInfos;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 百度导航 SDK 的薄封装：初始化、算路、进入专业导航。
+ *
+ * <p>SDK 的入口全部通过 {@link BaiduNaviManagerFactory} 获取管理，
+ * 算路结果通过 Handler 回调 {@code MSG_NAVI_ROUTE_PLAN_*} 通知。
+ */
+final class NaviController {
+
+    private static final String TAG = "NaviController";
+
+    private final Activity activity;
+    private final Callback callback;
+
+    private IBaiduNaviManager naviManager;
+    private IBNRouteGuideManager routeGuideManager;
+    private boolean initialized;
+    private boolean routePlanned;
+
+    interface Callback {
+        void onInitSuccess();
+
+        void onInitFailed(String reason);
+
+        void onRoutePlanned();
+
+        void onRouteFailed(String reason);
+    }
+
+    NaviController(Activity activity, Callback callback) {
+        this.activity = activity;
+        this.callback = callback;
+    }
+
+    void init(String sdcardRootPath) {
+        if (initialized) {
+            return;
+        }
+        naviManager = BaiduNaviManagerFactory.getBaiduNaviManager();
+        routeGuideManager = BaiduNaviManagerFactory.getRouteGuideManager();
+
+        BNaviInitConfig config = new BNaviInitConfig.Builder()
+                .sdcardRootPath(sdcardRootPath)
+                .naviInitListener(new IBaiduNaviManager.INaviInitListener() {
+                    @Override
+                    public void onAuthResult(int errorCode, String message) {
+                        Log.i(TAG, "onAuthResult: " + errorCode + " " + message);
+                    }
+
+                    @Override
+                    public void initStart() {
+                        Log.i(TAG, "navi init start");
+                    }
+
+                    @Override
+                    public void initSuccess() {
+                        initialized = true;
+                        callback.onInitSuccess();
+                    }
+
+                    @Override
+                    public void initFailed(int errorCode) {
+                        callback.onInitFailed("导航初始化失败，错误码 " + errorCode);
+                    }
+                })
+                .build();
+        naviManager.init(activity.getApplicationContext(), config);
+    }
+
+    /** 申请 SDK 授权。AK 需与包名、签名 SHA1 一致，否则导航不可用。 */
+    void loadAuth(String ak, String deviceId) {
+        if (naviManager == null) {
+            callback.onInitFailed("导航 SDK 尚未初始化，无法申请授权");
+            return;
+        }
+        naviManager.loadAuth(ak, deviceId, new IBNLicenseListener() {
+            @Override
+            public void onSuccess(boolean success) {
+                Log.i(TAG, "loadAuth success: " + success);
+            }
+
+            @Override
+            public void onError(int errorCode, String message) {
+                Log.e(TAG, "loadAuth error: " + errorCode + " " + message);
+                callback.onInitFailed("导航授权失败 (" + errorCode + "): " + message);
+            }
+        });
+    }
+
+    /** 发起驾车路线规划。 */
+    void planRoute(double startLat, double startLng, String startName,
+            double endLat, double endLng, String endName) {
+        if (!initialized) {
+            callback.onRouteFailed("导航 SDK 尚未初始化完成");
+            return;
+        }
+
+        BNRoutePlanNode start = new BNRoutePlanNode.Builder()
+                .latitude(startLat)
+                .longitude(startLng)
+                .name(startName)
+                .description(startName)
+                .build();
+        BNRoutePlanNode end = new BNRoutePlanNode.Builder()
+                .latitude(endLat)
+                .longitude(endLng)
+                .name(endName)
+                .description(endName)
+                .build();
+
+        List<BNRoutePlanNode> nodes = new ArrayList<>();
+        nodes.add(start);
+        nodes.add(end);
+
+        routePlanned = false;
+        BaiduNaviManagerFactory.getRoutePlanManager().routePlan(nodes,
+                IBNRoutePlanManager.RoutePlanPreference.ROUTE_PLAN_PREFERENCE_DEFAULT,
+                null,
+                new Handler(Looper.getMainLooper()) {
+                    @Override
+                    public void handleMessage(Message msg) {
+                        switch (msg.what) {
+                            case IBNRoutePlanManager.MSG_NAVI_ROUTE_PLAN_START:
+                                Log.i(TAG, "route plan start");
+                                break;
+                            case IBNRoutePlanManager.MSG_NAVI_ROUTE_PLAN_SUCCESS:
+                                routePlanned = true;
+                                Log.i(TAG, "route plan success");
+                                callback.onRoutePlanned();
+                                break;
+                            case IBNRoutePlanManager.MSG_NAVI_ROUTE_PLAN_FAILED:
+                                Log.e(TAG, "route plan failed: " + msg.arg1);
+                                callback.onRouteFailed("算路失败，错误码 " + msg.arg1);
+                                break;
+                            case IBNRoutePlanManager.MSG_NAVI_ROUTE_PLAN_TO_NAVI:
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                });
+    }
+
+    /**
+     * 创建专业导航视图并返回，由调用方挂到布局里。
+     *
+     * @param mock true 为模拟导航，false 为真实导航
+     */
+    View createGuideView(boolean mock) {
+        if (routeGuideManager == null) {
+            return null;
+        }
+        Bundle params = new Bundle();
+        // ADD_MAP 保持默认 true：专业导航页自带地图，路线与诱导面板都在这个 View 内。
+        params.putBoolean(BNaviCommonParams.ProGuideKey.IS_REALNAVI, !mock);
+        params.putBoolean(BNaviCommonParams.ProGuideKey.IS_SUPPORT_FULL_SCREEN, true);
+
+        BNGuideConfig config = new BNGuideConfig.Builder()
+                .params(params)
+                .build();
+        return routeGuideManager.onCreate(activity, config);
+    }
+
+    /** 算路成功后开启专业导航。 */
+    boolean startNavi() {
+        if (routeGuideManager == null) {
+            return false;
+        }
+        return BaiduNaviManagerFactory.getLightNaviManager().startProfessionalNavi();
+    }
+
+    void onStart() {
+        if (routeGuideManager != null) {
+            routeGuideManager.onStart();
+        }
+    }
+
+    void onResume() {
+        if (routeGuideManager != null) {
+            routeGuideManager.onResume();
+        }
+    }
+
+    void onPause() {
+        if (routeGuideManager != null) {
+            routeGuideManager.onPause();
+        }
+    }
+
+    void onStop() {
+        if (routeGuideManager != null) {
+            routeGuideManager.onStop();
+        }
+    }
+
+    void onDestroy() {
+        if (routeGuideManager != null) {
+            routeGuideManager.onDestroy(false);
+        }
+    }
+
+    void setNaviListener(IBNaviListener listener) {
+        if (routeGuideManager != null) {
+            routeGuideManager.setNaviListener(listener);
+        }
+    }
+
+    void setNaviViewListener(IBNaviViewListener listener) {
+        if (routeGuideManager != null) {
+            routeGuideManager.setNaviViewListener(listener);
+        }
+    }
+
+    void stopNavi() {
+        if (routeGuideManager != null) {
+            routeGuideManager.stopNavi();
+        }
+    }
+
+    boolean isRoutePlanned() {
+        return routePlanned;
+    }
+
+    BNRoutePlanInfos getRoutePlanInfos() {
+        return BaiduNaviManagerFactory.getRoutePlanManager().getRoutePlanInfo();
+    }
+}
