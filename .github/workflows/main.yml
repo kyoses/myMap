@@ -1,0 +1,55 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # 1. 解决 Gradle 测试任务因中文路径导致 ClassNotFoundException 的问题
+    #    强制指定 checkout 路径为纯 ASCII 目录
+    defaults:
+      run:
+        working-directory: ./android-project
+
+    steps:
+    # 2. 拉取代码到指定目录
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        path: android-project
+
+    # 3. 设置 Java JDK 17 (适配你的环境要求)
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: 17
+        cache: gradle
+
+    # 4. 注入百度地图 AK (从 GitHub Secrets 获取，安全不入库)
+    - name: Configure Baidu Map AK
+      run: |
+        echo "baiduMapAk=${{ secrets.BAIDU_MAP_AK }}" >> gradle.properties
+
+    # 5. 授予 gradlew 执行权限
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    # 6. 编译与单元测试
+    - name: Build and Test with Gradle
+      run: |
+        # 执行清理、单元测试并打包 Debug 包
+        # -Pandroid.injected.invoked.from.ide 可强制跳过某些 IDE 特有检查
+        # 百度导航 SDK 无 x86 库，这里强制指定只打 arm 包避免警告
+        ./gradlew clean assembleDebug testDebugUnitTest --stacktrace -Pandroid.injected.invoked.from.ide=true
+
+    # 7. (可选) 上传 APK 产物
+    - name: Upload Debug APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: mymap-debug-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
