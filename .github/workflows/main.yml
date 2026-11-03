@@ -2,54 +2,60 @@ name: Android CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
+  workflow_dispatch: # 允许你手动在网页上点按钮触发编译
 
 jobs:
   build:
+    name: Build Debug APK
     runs-on: ubuntu-latest
-    # 1. 解决 Gradle 测试任务因中文路径导致 ClassNotFoundException 的问题
-    #    强制指定 checkout 路径为纯 ASCII 目录
-    defaults:
-      run:
-        working-directory: ./android-project
 
     steps:
-    # 2. 拉取代码到指定目录
-    - name: Checkout code
+    # 1. 拉取代码
+    - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        path: android-project
 
-    # 3. 设置 Java JDK 17 (适配你的环境要求)
+    # 2. 设置 Java 17 环境
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
-        distribution: 'zulu'
-        java-version: 17
+        java-version: '17'
+        distribution: 'temurin'
         cache: gradle
 
-    # 4. 注入百度地图 AK (从 GitHub Secrets 获取，安全不入库)
+    # 3. 安装 Android SDK（包含你需要的 SDK 35 和 Build Tools 35.0.0）
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v3
+
+    # 4. 安全注入百度地图 AK (不泄露到代码中)
     - name: Configure Baidu Map AK
       run: |
         echo "baiduMapAk=${{ secrets.BAIDU_MAP_AK }}" >> gradle.properties
+        cat gradle.properties
 
-    # 5. 授予 gradlew 执行权限
+    # 5. 授权 Gradle 执行脚本权限
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 6. 编译与单元测试
-    - name: Build and Test with Gradle
-      run: |
-        # 执行清理、单元测试并打包 Debug 包
-        # -Pandroid.injected.invoked.from.ide 可强制跳过某些 IDE 特有检查
-        # 百度导航 SDK 无 x86 库，这里强制指定只打 arm 包避免警告
-        ./gradlew clean assembleDebug testDebugUnitTest --stacktrace -Pandroid.injected.invoked.from.ide=true
+    # 6. 清理并编译 APK
+    #    百度地图 SDK 不支持 x86/x86_64，这里只打 arm64 和 armv7 的包
+    - name: Build debug APK
+      run: ./gradlew clean assembleDebug -Pandroid.injected.invoked.from.ide=true
 
-    # 7. (可选) 上传 APK 产物
+    # 7. (解决中文路径坑) 移动到纯英文路径下运行单元测试
+    - name: Run Unit Tests (Fix Chinese Path Issue)
+      run: |
+        mkdir -p /tmp/myMapTest
+        cp -R . /tmp/myMapTest/
+        cd /tmp/myMapTest
+        chmod +x gradlew
+        ./gradlew :app:testDebugUnitTest
+
+    # 8. 上传编译好的 APK 产物
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: mymap-debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: app/build/outputs/apk/debug/*.apk
