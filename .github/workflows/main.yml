@@ -26,10 +26,53 @@ jobs:
         cache: gradle
 
     # 3. 安装 Android SDK（需要 SDK 35 与 Build Tools 35.0.0）
+    #    注意：不能用 android-actions/setup-android 的默认许可证流程。
+    #    它向 sdkmanager --licenses 的交互提示喂固定数量的 y，许可证一多
+    #    就会在确认途中退出，步骤直接失败。这里改为直接把许可证哈希写入
+    #    licenses 目录，完全避开交互。
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
+      with:
+        accept-android-sdk-licenses: false
+        packages: ''
 
-    # 4. 注入百度地图 AK（未配置 secret 时留空，不影响编译）
+    - name: Accept Android SDK licenses
+      run: |
+        set -euo pipefail
+        LICENSES_DIR="${ANDROID_SDK_ROOT}/licenses"
+        mkdir -p "$LICENSES_DIR"
+        accept_license() {
+          printf '%s\n' "$2" > "${LICENSES_DIR}/$1"
+        }
+        accept_license android-sdk-license 24333f8a63b6825ea9c5514f83c2829b004d1fee
+        accept_license android-sdk-preview-license 84831b9409646a918e30573bab4c9c91346d8abd
+        accept_license android-sdk-arm-dbt-license 859f317696f67ef3d7f30a50a5560e7834b43903
+        accept_license android-googletv-license 601085b94cd77f0b54ff86406957099ebe79c4d6
+        accept_license android-googlexr-license ceff83576aac4f7f37cb98fe189e9fb3c49d3b81
+        accept_license google-gdk-license 33b6a2b64607f11b759f320ef9dff4ae5c47d97a
+        accept_license microxr-sysimage-license 3a7848b1d7366ca5cfa0be477627644ca73f47e3
+        accept_license mips-android-sysimage-license e9acab5b5fbb560a72cfaecce8946896ff6aab9d
+        ls -l "$LICENSES_DIR"
+
+    # 4. 安装 SDK 组件
+    - name: Install SDK packages
+      run: |
+        set -euo pipefail
+        # setup-android 把 cmdline-tools 装在带版本号的目录里，这里两种路径都找一下
+        SDKMANAGER=""
+        for candidate in \
+            "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" \
+            "${ANDROID_SDK_ROOT}/cmdline-tools"/*/bin/sdkmanager; do
+          if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
+        done
+        if [ -z "$SDKMANAGER" ]; then
+          echo "::error::未找到 sdkmanager"
+          exit 1
+        fi
+        echo "使用 $SDKMANAGER"
+        yes | "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+    # 5. 注入百度地图 AK（未配置 secret 时留空，不影响编译）
     - name: Configure Baidu Map AK
       run: |
         echo "baiduMapAk=${{ secrets.BAIDU_MAP_AK }}" >> gradle.properties
@@ -38,10 +81,6 @@ jobs:
         echo "baiduTtsSecretKey=${{ secrets.BAIDU_TTS_SECRET_KEY }}" >> gradle.properties
         echo "baiduTtsAuthSn=${{ secrets.BAIDU_TTS_AUTH_SN }}" >> gradle.properties
         cat gradle.properties
-
-    # 5. 赋予 Gradle 脚本执行权限
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
 
     # 6. 编译 Debug APK
     #    百度地图 SDK 不支持 x86/x86_64，模拟器上只有 arm64 与 armv7 架构可用
