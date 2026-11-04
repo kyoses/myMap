@@ -61,11 +61,25 @@ jobs:
     - name: Install SDK packages
       run: |
         set -euo pipefail
-        # 只用 setup-android 刚装好的 22.0 版本，不要用 runner 自带的 latest，
-        # 后者版本较旧，解析新版仓库 XML 会直接失败。
-        SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/22.0/bin/sdkmanager"
+        # 不要硬编码版本号：setup-android 的默认 cmdline-tools 版本会随 action
+        # 版本变化（v3 是 16.0，v4 是 22.0）。
+        # 优先用 setup-android 装好的带版本号目录 —— 它的版本与当前仓库 XML
+        # 匹配；runner 镜像自带的 latest 较旧，解析新版仓库 XML 会报
+        # package.xml parsing problem 并以退出码 1 结束，只作为兜底。
+        SDKMANAGER=""
+        for dir in $(ls -d "${ANDROID_SDK_ROOT}"/cmdline-tools/*/ 2>/dev/null | sort -V); do
+          case "$(basename "$dir")" in
+            latest) continue ;;
+          esac
+          if [ -x "${dir}bin/sdkmanager" ]; then
+            SDKMANAGER="${dir}bin/sdkmanager"
+          fi
+        done
+        if [ -z "$SDKMANAGER" ]; then
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+        fi
         if [ ! -x "$SDKMANAGER" ]; then
-          echo "::error::未找到 sdkmanager: $SDKMANAGER"
+          echo "::error::未找到可用的 sdkmanager"
           ls -l "${ANDROID_SDK_ROOT}/cmdline-tools/" || true
           exit 1
         fi
