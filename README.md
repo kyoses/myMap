@@ -32,6 +32,23 @@ AK 通过 `manifestPlaceholders` 注入 manifest 的 `com.baidu.lbsapi.API_KEY`�
 
 导航授权在 `MapActivity` 初始化成功后通过 `loadAuth(ak, deviceId)` 完成。
 
+## 配置语音播报（TTS，可选）
+
+导航语音使用百度内置 TTS，需要额外申请授权（先申请 SDK 授权，再到
+`https://ai.baidu.com/tech/speech` 申请语音技术应用，最后在地图开放平台申请离线 TTS 的 audio_key）。
+
+在 `gradle.properties` 中写入：
+
+```properties
+baiduTtsAppId=语音技术应用的 App ID
+baiduTtsAppKey=语音技术应用的 API Key
+baiduTtsSecretKey=语音技术应用的 Secret Key
+baiduTtsAuthSn=离线 TTS 的 audio_key
+```
+
+四项通过 `manifestPlaceholders` 注入 manifest，运行时由 `NaviTtsConfig` 读取。
+**任一项缺失时自动跳过 TTS 初始化**，导航功能不受影响，只是没有语音播报。
+
 ## 构建
 
 ```sh
@@ -41,6 +58,10 @@ AK 通过 `manifestPlaceholders` 注入 manifest 的 `com.baidu.lbsapi.API_KEY`�
 
 > 若工程路径包含中文，Gradle 的测试任务会报 `ClassNotFoundException`（测试类加载路径问题），
 > 把工程复制到纯 ASCII 路径下执行测试与打包即可。
+
+> 若所在网络无法访问 `services.gradle.org`（下载 Gradle 发行版），可把
+> `gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl` 换成
+> `https://mirrors.cloud.tencent.com/gradle/gradle-8.9-bin.zip`，两者 sha256 一致。
 
 ## SAEP 说明
 
@@ -61,6 +82,7 @@ SAEP 是字节跳动豆包手机助手发布的屏幕自动化操作声明协议
 | `com.baidu.lbsyun:BaiduMapSDK_Map-Navi` | 8.2.0.2 |
 | `com.baidu.lbsyun:BaiduMapSDK_Location` | 9.6.5.1 |
 | `com.baidu.lbsyun:BNGlide4` | 1.0.1 |
+| `com.baidu.lbsyun:NaviTts` | 3.2.13（语音播报） |
 | `com.airbnb.android:lottie` | 3.6.0（导航底栏依赖，缺失会导致底栏不显示） |
 
 ## 已知限制
@@ -68,3 +90,13 @@ SAEP 是字节跳动豆包手机助手发布的屏幕自动化操作声明协议
 百度 maven 版导航 SDK 的原生库 `libBaiduMapSDK_map_for_navi_v8_2_0.so` 只提供
 **arm64-v8a / armeabi-v7a**，没有 x86/x86_64。因此在 x86_64 模拟器上地图无法初始化，
 应用会提示「地图初始化失败」而不会崩溃；验证地图与导航需要 **ARM 真机**（或 arm64 模拟器镜像）。
+
+## CI
+
+`.github/workflows/main.yml` 在每次 push 到 `main` 时编译 Debug APK 并跑单元测试，
+产物以 artifact 形式上传。可选的仓库密钥（不配置也能编译，只是地图与语音不可用）：
+
+| Secret | 用途 |
+| --- | --- |
+| `BAIDU_MAP_AK` | 百度地图 AK |
+| `BAIDU_TTS_APP_ID` / `BAIDU_TTS_APP_KEY` / `BAIDU_TTS_SECRET_KEY` / `BAIDU_TTS_AUTH_SN` | 语音播报授权 |

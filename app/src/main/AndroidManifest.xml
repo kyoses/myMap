@@ -34,6 +34,20 @@
             android:name="com.baidu.lbsapi.API_KEY"
             android:value="${BAIDU_MAP_AK}" />
 
+        <!-- 百度导航 TTS 授权参数，缺失时导航无语音播报但功能可用 -->
+        <meta-data
+            android:name="com.baidu.navisdk.tts.APP_ID"
+            android:value="${BAIDU_TTS_APP_ID}" />
+        <meta-data
+            android:name="com.baidu.navisdk.tts.APP_KEY"
+            android:value="${BAIDU_TTS_APP_KEY}" />
+        <meta-data
+            android:name="com.baidu.navisdk.tts.SECRET_KEY"
+            android:value="${BAIDU_TTS_SECRET_KEY}" />
+        <meta-data
+            android:name="com.baidu.navisdk.tts.AUTH_SN"
+            android:value="${BAIDU_TTS_AUTH_SN}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

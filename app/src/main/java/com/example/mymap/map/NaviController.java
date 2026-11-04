@@ -20,6 +20,8 @@ import com.baidu.navisdk.adapter.IBNRoutePlanManager;
 import com.baidu.navisdk.adapter.struct.BNGuideConfig;
 import com.baidu.navisdk.adapter.struct.BNaviInitConfig;
 import com.baidu.navisdk.adapter.struct.BNRoutePlanInfos;
+import com.baidu.navisdk.adapter.struct.BNTTsInitConfig;
+import com.baidu.navisdk.tts.ITTSInitListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,6 +52,10 @@ final class NaviController {
         void onRoutePlanned();
 
         void onRouteFailed(String reason);
+
+        void onTtsReady();
+
+        void onTtsUnavailable(String reason);
     }
 
     NaviController(Activity activity, Callback callback) {
@@ -110,6 +116,40 @@ final class NaviController {
                 callback.onInitFailed("导航授权失败 (" + errorCode + "): " + message);
             }
         });
+    }
+
+    /**
+     * 初始化内置 TTS（语音播报）。
+     *
+     * <p>未配置 TTS 授权参数时直接跳过，导航仍可正常使用，只是没有语音。
+     */
+    void initTts(NaviTtsConfig config) {
+        if (config == null || !config.isConfigured()) {
+            Log.w(TAG, "TTS 授权参数未配置，跳过语音播报初始化");
+            callback.onTtsUnavailable("未配置 TTS 授权参数，导航将无语音播报");
+            return;
+        }
+        BNTTsInitConfig ttsConfig = new BNTTsInitConfig.Builder()
+                .context(activity.getApplicationContext())
+                .appId(config.appId)
+                .appKey(config.appKey)
+                .secretKey(config.secretKey)
+                .authSn(config.authSn)
+                .listener(new ITTSInitListener() {
+                    @Override
+                    public void onSuccess() {
+                        Log.i(TAG, "TTS init success");
+                        callback.onTtsReady();
+                    }
+
+                    @Override
+                    public void onFail(int errorCode) {
+                        Log.e(TAG, "TTS init failed: " + errorCode);
+                        callback.onTtsUnavailable("TTS 初始化失败，错误码 " + errorCode);
+                    }
+                })
+                .build();
+        BaiduNaviManagerFactory.getTTSManager().initTTS(ttsConfig);
     }
 
     /** 发起驾车路线规划。 */

@@ -226,6 +226,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
         } else {
             setStatus("未配置百度地图 AK，请在 gradle.properties 设置 baiduMapAk");
         }
+        naviController.initTts(NaviTtsConfig.read(this));
         naviController.setNaviListener(new IBNaviListener() {
             @Override
             public void onNaviGuideEnd() {
@@ -277,6 +278,16 @@ public class MapActivity extends android.app.Activity implements NaviController.
 
     @Override
     public void onRouteFailed(String reason) {
+        setStatus(reason);
+    }
+
+    @Override
+    public void onTtsReady() {
+        setStatus("语音播报已就绪");
+    }
+
+    @Override
+    public void onTtsUnavailable(String reason) {
         setStatus(reason);
     }
 

@@ -13,8 +13,14 @@ android {
         versionCode 1
         versionName "1.0"
 
-        // 百度地图 AK 通过 manifestPlaceholders 注入，避免把密钥写死在源码里。
-        manifestPlaceholders = [BAIDU_MAP_AK: project.findProperty('baiduMapAk') ?: '']
+        // 百度地图 AK 与 TTS 授权参数通过 manifestPlaceholders 注入，避免把密钥写死在源码里。
+        manifestPlaceholders = [
+                BAIDU_MAP_AK      : project.findProperty('baiduMapAk') ?: '',
+                BAIDU_TTS_APP_ID  : project.findProperty('baiduTtsAppId') ?: '',
+                BAIDU_TTS_APP_KEY : project.findProperty('baiduTtsAppKey') ?: '',
+                BAIDU_TTS_SECRET_KEY: project.findProperty('baiduTtsSecretKey') ?: '',
+                BAIDU_TTS_AUTH_SN : project.findProperty('baiduTtsAuthSn') ?: ''
+        ]
 
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
@@ -67,6 +73,8 @@ dependencies {
     implementation 'com.baidu.lbsyun:BaiduMapSDK_Location:9.6.5.1'
     // 导航内部 Glide 适配层（与 Glide 4.x 配套）
     implementation 'com.baidu.lbsyun:BNGlide4:1.0.1'
+    // 导航语音播报（TTS）组件
+    implementation 'com.baidu.lbsyun:NaviTts:3.2.13'
 
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.cardview:cardview:1.0.0'

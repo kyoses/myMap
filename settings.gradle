@@ -1,8 +1,11 @@
 pluginManagement {
     repositories {
+        // 百度地图 SDK 只在 maven.baidu.com 有正式发布，但该域名在部分网络下
+        // 不可达；阿里云镜像代理了同样的产物，放在前面可以避免解析失败。
         maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
         maven { url 'https://maven.aliyun.com/repository/google' }
         maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.baidu.com/repository/public' }
         gradlePluginPortal()
         google()
         mavenCentral()
@@ -14,6 +17,7 @@ dependencyResolutionManagement {
     repositories {
         maven { url 'https://maven.aliyun.com/repository/google' }
         maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.baidu.com/repository/public' }
         google()
         mavenCentral()
     }

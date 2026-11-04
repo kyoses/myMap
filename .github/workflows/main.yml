@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # ÔÊĞíÄãÊÖ¶¯ÔÚÍøÒ³ÉÏµã°´Å¥´¥·¢±àÒë
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. À­È¡´úÂë
+    # 1. æ£€å‡ºä»£ç 
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. ÉèÖÃ Java 17 »·¾³
+    # 2. é…ç½® JDK 17
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -25,35 +25,34 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. °²×° Android SDK£¨°üº¬ÄãĞèÒªµÄ SDK 35 ºÍ Build Tools 35.0.0£©
+    # 3. å®‰è£… Android SDKï¼ˆéœ€è¦ SDK 35 ä¸ Build Tools 35.0.0ï¼‰
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
 
-    # 4. °²È«×¢Èë°Ù¶ÈµØÍ¼ AK (²»Ğ¹Â¶µ½´úÂëÖĞ)
+    # 4. æ³¨å…¥ç™¾åº¦åœ°å›¾ AKï¼ˆæœªé…ç½® secret æ—¶ç•™ç©ºï¼Œä¸å½±å“ç¼–è¯‘ï¼‰
     - name: Configure Baidu Map AK
       run: |
         echo "baiduMapAk=${{ secrets.BAIDU_MAP_AK }}" >> gradle.properties
+        echo "baiduTtsAppId=${{ secrets.BAIDU_TTS_APP_ID }}" >> gradle.properties
+        echo "baiduTtsAppKey=${{ secrets.BAIDU_TTS_APP_KEY }}" >> gradle.properties
+        echo "baiduTtsSecretKey=${{ secrets.BAIDU_TTS_SECRET_KEY }}" >> gradle.properties
+        echo "baiduTtsAuthSn=${{ secrets.BAIDU_TTS_AUTH_SN }}" >> gradle.properties
         cat gradle.properties
 
-    # 5. ÊÚÈ¨ Gradle Ö´ĞĞ½Å±¾È¨ÏŞ
+    # 5. èµ‹äºˆ Gradle è„šæœ¬æ‰§è¡Œæƒé™
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 6. ÇåÀí²¢±àÒë APK
-    #    °Ù¶ÈµØÍ¼ SDK ²»Ö§³Ö x86/x86_64£¬ÕâÀïÖ»´ò arm64 ºÍ armv7 µÄ°ü
+    # 6. ç¼–è¯‘ Debug APK
+    #    ç™¾åº¦åœ°å›¾ SDK ä¸æ”¯æŒ x86/x86_64ï¼Œæ¨¡æ‹Ÿå™¨ä¸Šåªæœ‰ arm64 ä¸ armv7 æ¶æ„å¯ç”¨
     - name: Build debug APK
-      run: ./gradlew clean assembleDebug -Pandroid.injected.invoked.from.ide=true
+      run: ./gradlew assembleDebug -Pandroid.injected.invoked.from.ide=true
 
-    # 7. (½â¾öÖĞÎÄÂ·¾¶¿Ó) ÒÆ¶¯µ½´¿Ó¢ÎÄÂ·¾¶ÏÂÔËĞĞµ¥Ôª²âÊÔ
-    - name: Run Unit Tests (Fix Chinese Path Issue)
-      run: |
-        mkdir -p /tmp/myMapTest
-        cp -R . /tmp/myMapTest/
-        cd /tmp/myMapTest
-        chmod +x gradlew
-        ./gradlew :app:testDebugUnitTest
+    # 7. è¿è¡Œå•å…ƒæµ‹è¯•
+    - name: Run Unit Tests
+      run: ./gradlew :app:testDebugUnitTest
 
-    # 8. ÉÏ´«±àÒëºÃµÄ APK ²úÎï
+    # 8. ä¸Šä¼ æ„å»ºå¥½çš„ APK äº§ç‰©
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
       with:
