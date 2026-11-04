@@ -93,6 +93,9 @@ jobs:
 
     # 7. 编译 Debug APK
     #    百度地图 SDK 不支持 x86/x86_64，模拟器上只有 arm64 与 armv7 架构可用
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
     - name: Build debug APK
       run: ./gradlew assembleDebug -Pandroid.injected.invoked.from.ide=true
 
