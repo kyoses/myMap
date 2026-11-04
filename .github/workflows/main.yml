@@ -25,20 +25,11 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # 3. 安装 Android SDK（需要 SDK 35 与 Build Tools 35.0.0）
-    #    两个注意点：
-    #    a) 不能用 setup-android 的默认许可证流程 —— 它向 sdkmanager --licenses
-    #       的交互提示只喂固定数量的 y，runner 上待确认的许可证有 7 个，
-    #       走到一半就退出，步骤直接失败。改为自己写许可证哈希文件。
-    #    b) runner 镜像预装的 cmdline-tools/latest 版本偏旧，解析新版仓库 XML
-    #       会报 package.xml parsing problem 并以退出码 1 结束。setup-android
-    #       会另外下载匹配版本装到 cmdline-tools/22.0，下面固定用那个路径。
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v3
-      with:
-        accept-android-sdk-licenses: false
-        packages: ''
-
+    # 3. 预置 Android SDK 许可证
+    #    必须排在 setup-android 之前 —— 否则它安装组件时才发现许可证没接受。
+    #    不能用 setup-android 自带的 --licenses 流程：它向交互提示只喂固定
+    #    数量的 y，runner 上待确认的许可证有 7 个，走到一半就退出，步骤失败。
+    #    这里直接写许可证哈希，完全避开交互。哈希取自 sdkmanager --licenses 的产物。
     - name: Accept Android SDK licenses
       run: |
         set -euo pipefail
@@ -57,38 +48,40 @@ jobs:
         accept_license mips-android-sysimage-license e9acab5b5fbb560a72cfaecce8946896ff6aab9d
         ls -l "$LICENSES_DIR"
 
-    # 4. 安装 SDK 组件
-    - name: Install SDK packages
+    # 4. 安装 Android SDK
+    #    组件安装交给 setup-android 的 packages 参数：它用的是与当前仓库 XML
+    #    匹配的那份 sdkmanager（装在 cmdline-tools/<版本号> 目录），不是
+    #    runner 镜像自带的 latest（那份版本旧，解析仓库 XML 会失败）。
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        accept-android-sdk-licenses: false
+        packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+    # 5. 校验 SDK 组件
+    #    GitHub runner 镜像已预装 platforms;android-35、build-tools;35.0.0
+    #    和 platform-tools（build_tools_min_version 为 34.0.0，会装所有 >=34
+    #    的版本）。这里校验一下，缺失就直接报错，不做重复安装。
+    - name: Verify SDK packages
       run: |
         set -euo pipefail
-        # 不要硬编码版本号：setup-android 的默认 cmdline-tools 版本会随 action
-        # 版本变化（v3 是 16.0，v4 是 22.0）。
-        # 优先用 setup-android 装好的带版本号目录 —— 它的版本与当前仓库 XML
-        # 匹配；runner 镜像自带的 latest 较旧，解析新版仓库 XML 会报
-        # package.xml parsing problem 并以退出码 1 结束，只作为兜底。
-        SDKMANAGER=""
-        for dir in $(ls -d "${ANDROID_SDK_ROOT}"/cmdline-tools/*/ 2>/dev/null | sort -V); do
-          case "$(basename "$dir")" in
-            latest) continue ;;
-          esac
-          if [ -x "${dir}bin/sdkmanager" ]; then
-            SDKMANAGER="${dir}bin/sdkmanager"
+        echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+        ls -l "${ANDROID_SDK_ROOT}/cmdline-tools/" || true
+        ls -l "${ANDROID_SDK_ROOT}/platforms/" || true
+        ls -l "${ANDROID_SDK_ROOT}/build-tools/" || true
+        missing=0
+        for item in "platforms/android-35" "build-tools/35.0.0" "platform-tools"; do
+          if [ ! -d "${ANDROID_SDK_ROOT}/${item}" ]; then
+            echo "::error::缺少 SDK 组件: ${item}"
+            missing=1
           fi
         done
-        if [ -z "$SDKMANAGER" ]; then
-          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-        fi
-        if [ ! -x "$SDKMANAGER" ]; then
-          echo "::error::未找到可用的 sdkmanager"
-          ls -l "${ANDROID_SDK_ROOT}/cmdline-tools/" || true
+        if [ "$missing" -ne 0 ]; then
           exit 1
         fi
-        echo "使用 $SDKMANAGER"
-        yes | "$SDKMANAGER" --sdk_root="${ANDROID_SDK_ROOT}" \
-          "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-        ls -l "${ANDROID_SDK_ROOT}/platforms" "${ANDROID_SDK_ROOT}/build-tools"
+        echo "SDK 组件齐备"
 
-    # 5. 注入百度地图 AK（未配置 secret 时留空，不影响编译）
+    # 6. 注入百度地图 AK（未配置 secret 时留空，不影响编译）
     - name: Configure Baidu Map AK
       run: |
         echo "baiduMapAk=${{ secrets.BAIDU_MAP_AK }}" >> gradle.properties
@@ -98,16 +91,16 @@ jobs:
         echo "baiduTtsAuthSn=${{ secrets.BAIDU_TTS_AUTH_SN }}" >> gradle.properties
         cat gradle.properties
 
-    # 6. 编译 Debug APK
+    # 7. 编译 Debug APK
     #    百度地图 SDK 不支持 x86/x86_64，模拟器上只有 arm64 与 armv7 架构可用
     - name: Build debug APK
       run: ./gradlew assembleDebug -Pandroid.injected.invoked.from.ide=true
 
-    # 7. 运行单元测试
+    # 8. 运行单元测试
     - name: Run Unit Tests
       run: ./gradlew :app:testDebugUnitTest
 
-    # 8. 上传构建好的 APK 产物
+    # 9. 上传构建好的 APK 产物
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
       with:
