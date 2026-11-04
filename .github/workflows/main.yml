@@ -26,10 +26,13 @@ jobs:
         cache: gradle
 
     # 3. 安装 Android SDK（需要 SDK 35 与 Build Tools 35.0.0）
-    #    注意：不能用 android-actions/setup-android 的默认许可证流程。
-    #    它向 sdkmanager --licenses 的交互提示喂固定数量的 y，许可证一多
-    #    就会在确认途中退出，步骤直接失败。这里改为直接把许可证哈希写入
-    #    licenses 目录，完全避开交互。
+    #    两个注意点：
+    #    a) 不能用 setup-android 的默认许可证流程 —— 它向 sdkmanager --licenses
+    #       的交互提示只喂固定数量的 y，runner 上待确认的许可证有 7 个，
+    #       走到一半就退出，步骤直接失败。改为自己写许可证哈希文件。
+    #    b) runner 镜像预装的 cmdline-tools/latest 版本偏旧，解析新版仓库 XML
+    #       会报 package.xml parsing problem 并以退出码 1 结束。setup-android
+    #       会另外下载匹配版本装到 cmdline-tools/22.0，下面固定用那个路径。
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
       with:
@@ -58,19 +61,18 @@ jobs:
     - name: Install SDK packages
       run: |
         set -euo pipefail
-        # setup-android 把 cmdline-tools 装在带版本号的目录里，这里两种路径都找一下
-        SDKMANAGER=""
-        for candidate in \
-            "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" \
-            "${ANDROID_SDK_ROOT}/cmdline-tools"/*/bin/sdkmanager; do
-          if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
-        done
-        if [ -z "$SDKMANAGER" ]; then
-          echo "::error::未找到 sdkmanager"
+        # 只用 setup-android 刚装好的 22.0 版本，不要用 runner 自带的 latest，
+        # 后者版本较旧，解析新版仓库 XML 会直接失败。
+        SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/22.0/bin/sdkmanager"
+        if [ ! -x "$SDKMANAGER" ]; then
+          echo "::error::未找到 sdkmanager: $SDKMANAGER"
+          ls -l "${ANDROID_SDK_ROOT}/cmdline-tools/" || true
           exit 1
         fi
         echo "使用 $SDKMANAGER"
-        yes | "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        yes | "$SDKMANAGER" --sdk_root="${ANDROID_SDK_ROOT}" \
+          "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        ls -l "${ANDROID_SDK_ROOT}/platforms" "${ANDROID_SDK_ROOT}/build-tools"
 
     # 5. 注入百度地图 AK（未配置 secret 时留空，不影响编译）
     - name: Configure Baidu Map AK
