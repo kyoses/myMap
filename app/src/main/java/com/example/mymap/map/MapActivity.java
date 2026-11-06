@@ -3,7 +3,7 @@ package com.example.mymap.map;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.Environment;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -72,7 +72,9 @@ public class MapActivity extends android.app.Activity implements NaviController.
         }
 
         naviController = new NaviController(this, this);
-        naviController.init(Environment.getExternalStorageDirectory().getAbsolutePath());
+        // sdcardRootPath 是引擎数据目录名，SDK 内部用 getExternalFilesDir(name)
+        // 拼到应用私有外部目录下；传绝对路径会导致目录层级异常。
+        naviController.init("BaiduNavi");
 
         startButton.setOnClickListener(v -> planAndNavigate());
         findViewById(R.id.locate_button).setOnClickListener(v -> requestLocation());
@@ -162,9 +164,11 @@ public class MapActivity extends android.app.Activity implements NaviController.
             return;
         }
         try {
+            // 定位 SDK 同样要求先同意隐私政策，否则构造时会抛异常。
+            BaiduSdkInitializer.init(this, readAk());
             locationClient = new LocationClient(this.getApplicationContext());
-        } catch (Exception e) {
-            setStatus("定位初始化失败: " + e.getMessage());
+        } catch (Throwable e) {
+            setStatus("定位初始化失败：" + describe(e));
             return;
         }
         LocationClientOption option = new LocationClientOption();
@@ -194,6 +198,13 @@ public class MapActivity extends android.app.Activity implements NaviController.
                                     new LatLng(currentLat, currentLng), 16.0f));
                 }
                 setStatus("定位: " + currentLocationName);
+            }
+
+            @Override
+            public void onLocDiagnosticMessage(int errorCode, int message,
+                    String detail) {
+                // 定位失败时 SDK 走这里，否则界面会一直停在旧状态，看不出原因。
+                Log.w("MyMap", "定位诊断 errorCode=" + errorCode + " " + detail);
             }
         });
         locationClient.start();
@@ -249,7 +260,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
         if (!ak.isEmpty()) {
             naviController.loadAuth(ak, android.os.Build.SERIAL);
         } else {
-            setStatus("未配置百度地图 AK，请在 gradle.properties 设置 baiduMapAk");
+            setStatus("未配置百度地图 AK，请在 local.properties 里设置 baiduMapAk");
         }
         naviController.initTts(NaviTtsConfig.read(this));
         naviController.setNaviListener(new IBNaviListener() {
@@ -313,7 +324,11 @@ public class MapActivity extends android.app.Activity implements NaviController.
 
     @Override
     public void onTtsUnavailable(String reason) {
-        setStatus(reason);
+        // TTS 只是可选增强，不要用它的提示覆盖掉导航初始化的错误信息。
+        Log.i("MyMap", reason);
+        if (naviController == null || !naviController.isInitialized()) {
+            setStatus(reason);
+        }
     }
 
     /** 创建并挂载专业导航 View。 */

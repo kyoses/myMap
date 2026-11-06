@@ -36,6 +36,12 @@ final class NaviController {
 
     private static final String TAG = "NaviController";
 
+    /** 百度授权失败码，见 com.baidu.lbsapi.auth.LBSAuthManager。 */
+    private static final int AUTH_CODE_SUCCESS = 0;
+    private static final int AUTH_CODE_KEY_NOT_EXIST = 101;
+    private static final int AUTH_CODE_NETWORK_INVALID = -10;
+    private static final int AUTH_CODE_NETWORK_FAILED = -11;
+
     private final Activity activity;
     private final Callback callback;
 
@@ -63,6 +69,15 @@ final class NaviController {
         this.callback = callback;
     }
 
+    /**
+     * 初始化导航 SDK。
+     *
+     * <p>初始化分两步且都是异步的：先 {@code authenticate()} 做联网授权，
+     * 授权成功后才回调 {@code initSuccess()}。授权失败时 SDK 只给一个错误码，
+     * 这里把它翻译成可读原因。
+     *
+     * @param sdcardRootPath 引擎数据目录名，会落在应用私有外部目录下
+     */
     void init(String sdcardRootPath) {
         if (initialized) {
             return;
@@ -76,6 +91,9 @@ final class NaviController {
                     @Override
                     public void onAuthResult(int errorCode, String message) {
                         Log.i(TAG, "onAuthResult: " + errorCode + " " + message);
+                        if (errorCode != AUTH_CODE_SUCCESS) {
+                            callback.onInitFailed(describeAuthError(errorCode, message));
+                        }
                     }
 
                     @Override
@@ -91,6 +109,7 @@ final class NaviController {
 
                     @Override
                     public void initFailed(int errorCode) {
+                        Log.e(TAG, "navi init failed: " + errorCode);
                         callback.onInitFailed("导航初始化失败，错误码 " + errorCode);
                     }
                 })
@@ -98,10 +117,31 @@ final class NaviController {
         naviManager.init(activity.getApplicationContext(), config);
     }
 
+    /** 把授权错误码翻译成可读原因。 */
+    private static String describeAuthError(int code, String message) {
+        String detail = (message == null || message.trim().isEmpty()) ? "" : "：" + message;
+        switch (code) {
+            case AUTH_CODE_KEY_NOT_EXIST:
+                return "AK 无效或不存在，请检查 local.properties 里的 baiduMapAk，"
+                        + "并确认 AK 与包名 com.example.mymap、签名 SHA1 匹配" + detail;
+            case AUTH_CODE_NETWORK_INVALID:
+            case AUTH_CODE_NETWORK_FAILED:
+                return "导航授权需要联网，请检查网络后重试" + detail;
+            default:
+                return "导航授权失败，错误码 " + code
+                        + "。若地图能用但导航不可用，通常是该 AK 未开通「驾车导航」权限，"
+                        + "需要在百度地图开放平台为应用勾选该权限" + detail;
+        }
+    }
+
     /** 申请 SDK 授权。AK 需与包名、签名 SHA1 一致，否则导航不可用。 */
     void loadAuth(String ak, String deviceId) {
         if (naviManager == null) {
             callback.onInitFailed("导航 SDK 尚未初始化，无法申请授权");
+            return;
+        }
+        if (ak == null || ak.trim().isEmpty()) {
+            callback.onInitFailed("未配置百度地图 AK，导航不可用");
             return;
         }
         naviManager.loadAuth(ak, deviceId, new IBNLicenseListener() {
@@ -156,7 +196,7 @@ final class NaviController {
     void planRoute(double startLat, double startLng, String startName,
             double endLat, double endLng, String endName) {
         if (!initialized) {
-            callback.onRouteFailed("导航 SDK 尚未初始化完成");
+            callback.onRouteFailed("导航 SDK 尚未初始化完成，请等待初始化成功后重试");
             return;
         }
 
@@ -284,6 +324,10 @@ final class NaviController {
 
     boolean isRoutePlanned() {
         return routePlanned;
+    }
+
+    boolean isInitialized() {
+        return initialized;
     }
 
     BNRoutePlanInfos getRoutePlanInfos() {
