@@ -1,0 +1,11 @@
+# 复制为 local.properties 后填写；该文件不入库。
+sdk.dir=C:/Users/kyozq/AppData/Local/Android/Sdk
+
+# 百度地图开放平台申请的 AK，需与包名 com.example.mymap 和签名 SHA1 匹配
+baiduMapAk=
+
+# 百度导航 TTS 授权（可选，缺失则无语音播报）
+baiduTtsAppId=
+baiduTtsAppKey=
+baiduTtsSecretKey=
+baiduTtsAuthSn=

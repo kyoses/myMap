@@ -2,6 +2,20 @@ plugins {
     id 'com.android.application'
 }
 
+// 密钥从 local.properties 读取（该文件不入库），gradle.properties 会被提交，
+// 不能用来放 AK。local.properties 优先，其次是 -P 参数或 gradle.properties。
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
+def resolveSecret = { String name ->
+    return localProps.getProperty(name) ?:
+            project.findProperty(name) ?:
+            (project.hasProperty(name) ? project.property(name) : '')
+}
+
 android {
     namespace 'com.example.mymap'
     compileSdk 35
@@ -15,11 +29,11 @@ android {
 
         // 百度地图 AK 与 TTS 授权参数通过 manifestPlaceholders 注入，避免把密钥写死在源码里。
         manifestPlaceholders = [
-                BAIDU_MAP_AK      : project.findProperty('baiduMapAk') ?: '',
-                BAIDU_TTS_APP_ID  : project.findProperty('baiduTtsAppId') ?: '',
-                BAIDU_TTS_APP_KEY : project.findProperty('baiduTtsAppKey') ?: '',
-                BAIDU_TTS_SECRET_KEY: project.findProperty('baiduTtsSecretKey') ?: '',
-                BAIDU_TTS_AUTH_SN : project.findProperty('baiduTtsAuthSn') ?: ''
+                BAIDU_MAP_AK        : resolveSecret('baiduMapAk'),
+                BAIDU_TTS_APP_ID    : resolveSecret('baiduTtsAppId'),
+                BAIDU_TTS_APP_KEY   : resolveSecret('baiduTtsAppKey'),
+                BAIDU_TTS_SECRET_KEY: resolveSecret('baiduTtsSecretKey'),
+                BAIDU_TTS_AUTH_SN   : resolveSecret('baiduTtsAuthSn')
         ]
 
         ndk {

@@ -21,14 +21,25 @@
 
 ## 配置百度地图 AK
 
-在 `gradle.properties` 中写入（该文件不入库）：
+AK 写在 **`local.properties`**（该文件不入库）：
 
 ```properties
+sdk.dir=C:/Users/kyozq/AppData/Local/Android/Sdk
 baiduMapAk=你的百度地图AK
 ```
 
-AK 需要与**包名** `com.example.mymap` 和**签名 SHA1**匹配，否则导航 SDK 授权失败、导航不可用。
+> 注意：`gradle.properties` 会被提交到 GitHub，不能用来放 AK。
+
+AK 需要与**包名** `com.example.mymap` 和**签名 SHA1**匹配，否则地图与导航不可用。
 AK 通过 `manifestPlaceholders` 注入 manifest 的 `com.baidu.lbsapi.API_KEY`。
+
+启动时 `BaiduSdkInitializer` 会依次做三件事，缺一不可：
+
+1. `SDKInitializer.setAgreePrivacy(context, true)` 与 `LocationClient.setAgreePrivacy(true)`
+   —— 官方文档要求调用 SDK 任何接口前先设置隐私合规，否则地图不支持发起检索、
+   路线规划等数据请求；
+2. `SDKInitializer.setApiKey(ak)` —— 注入 AK；
+3. `SDKInitializer.initialize(context)` —— 触发 AK 校验与 SDK 初始化。
 
 导航授权在 `MapActivity` 初始化成功后通过 `loadAuth(ak, deviceId)` 完成。
 
@@ -37,7 +48,7 @@ AK 通过 `manifestPlaceholders` 注入 manifest 的 `com.baidu.lbsapi.API_KEY`�
 导航语音使用百度内置 TTS，需要额外申请授权（先申请 SDK 授权，再到
 `https://ai.baidu.com/tech/speech` 申请语音技术应用，最后在地图开放平台申请离线 TTS 的 audio_key）。
 
-在 `gradle.properties` 中写入：
+同样写在 `local.properties`：
 
 ```properties
 baiduTtsAppId=语音技术应用的 App ID

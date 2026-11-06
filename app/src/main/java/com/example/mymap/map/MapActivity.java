@@ -90,6 +90,9 @@ public class MapActivity extends android.app.Activity implements NaviController.
      */
     private boolean initMap() {
         try {
+            // 必须先初始化 SDK：隐私合规接口与 AK 校验都在这里，缺少任一项
+            // 地图都无法初始化（官方文档要求 SDK 接口调用前先 setAgreePrivacy）。
+            BaiduSdkInitializer.init(this, readAk());
             mapView = new MapView(this);
             baiduMap = mapView.getMap();
             mapContainer.addView(mapView, new FrameLayout.LayoutParams(
@@ -98,11 +101,33 @@ public class MapActivity extends android.app.Activity implements NaviController.
             baiduMap.setMapStatus(MapStatusUpdateFactory.zoomTo(15.0f));
             return true;
         } catch (Throwable t) {
-            setStatus("地图初始化失败：" + t.getMessage()
-                    + "（当前 CPU 架构可能没有对应的原生库，请使用 ARM 真机）");
+            setStatus("地图初始化失败：" + describe(t));
             startButton.setEnabled(false);
             return false;
         }
+    }
+
+    /** 把异常链拼成可读文本，便于直接从界面判断原因。 */
+    private String describe(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = t;
+        int depth = 0;
+        while (cur != null && depth < 5) {
+            if (depth > 0) {
+                sb.append(" <- ");
+            }
+            sb.append(cur.getClass().getSimpleName());
+            if (cur.getMessage() != null && !cur.getMessage().trim().isEmpty()) {
+                sb.append(": ").append(cur.getMessage().trim());
+            }
+            cur = cur.getCause();
+            depth++;
+        }
+        String text = sb.toString();
+        if (readAk().isEmpty()) {
+            text += "｜未配置百度地图 AK（local.properties 的 baiduMapAk）";
+        }
+        return text;
     }
 
     private void requestLocation() {
