@@ -124,9 +124,17 @@ SAEP 是字节跳动豆包手机助手发布的屏幕自动化操作声明协议
 
 ## 已知限制
 
-百度 maven 版导航 SDK 的原生库 `libBaiduMapSDK_map_for_navi_v8_2_0.so` 只提供
-**arm64-v8a / armeabi-v7a**，没有 x86/x86_64。因此在 x86_64 模拟器上地图无法初始化，
-应用会提示「地图初始化失败」而不会崩溃；验证地图与导航需要 **ARM 真机**（或 arm64 模拟器镜像）。
+百度 maven 版导航 SDK 的原生库 `libBaiduMapSDK_map_for_navi_v8_2_0.so` 与
+`libapp_BaiduNaviApplib.so` 只提供 **arm64-v8a / armeabi-v7a**，没有 x86/x86_64。
+
+- **x86/x86_64 设备**（含 x86_64 模拟器）：地图无法初始化，导航不可用。
+  应用会分别提示「地图初始化失败」和「当前设备架构没有百度导航的原生库」，
+  不会崩溃 —— 早期版本会因为 SDK 在 `Nav-Auth` 线程里 loadLibrary 失败且不捕获
+  异常而直接闪退，现在已加架构守卫。
+- **检索与选点**用的是独立的 `BaiduMapSDK_Search`，不依赖导航引擎，
+  因此在非 ARM 设备上仍然可用（前提是 AK 勾选了检索服务）。
+- 完整验证地图与导航需要 **ARM 真机**（arm64 模拟器镜像在 x86_64 host 上
+  不被 QEMU 支持）。
 
 ## CI
 
