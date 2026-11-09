@@ -76,8 +76,7 @@ final class PoiSearchHelper {
             @Override
             public void onGetPoiResult(PoiResult result) {
                 if (result == null || result.error != SearchResult.ERRORNO.NO_ERROR) {
-                    callback.onFailure("检索失败，错误码 "
-                            + (result == null ? "null" : result.error));
+                    callback.onFailure(describeError(result == null ? null : result.error));
                     return;
                 }
                 List<Poi> pois = new ArrayList<>();
@@ -143,7 +142,8 @@ final class PoiSearchHelper {
             public void onGetGeoCodeResult(GeoCodeResult result) {
                 if (result == null || result.error != SearchResult.ERRORNO.NO_ERROR
                         || result.getLocation() == null) {
-                    callback.onFailure("地址解析失败");
+                    callback.onFailure("地址解析失败：" + describeError(
+                            result == null ? null : result.error));
                     return;
                 }
                 callback.onSuccess(new Poi(address.trim(), "", result.getLocation()));
@@ -181,7 +181,8 @@ final class PoiSearchHelper {
             @Override
             public void onGetReverseGeoCodeResult(ReverseGeoCodeResult result) {
                 if (result == null || result.error != SearchResult.ERRORNO.NO_ERROR) {
-                    callback.onFailure("反向解析失败");
+                    callback.onFailure("反向解析失败：" + describeError(
+                            result == null ? null : result.error));
                     return;
                 }
                 String address = result.getAddress();
@@ -202,5 +203,39 @@ final class PoiSearchHelper {
 
     static void logError(String op, Throwable t) {
         Log.w(TAG, op + " failed", t);
+    }
+
+    /** 把检索错误码翻译成可读原因。 */
+    private static String describeError(SearchResult.ERRORNO error) {
+        if (error == null) {
+            return "检索失败：没有返回结果";
+        }
+        switch (error) {
+            case PERMISSION_UNFINISHED:
+                return "检索权限未开通。该 AK 的「启动服务」里没有勾选检索，"
+                        + "请到百度地图开放平台 → 应用管理 → 我的应用 → 点击 AK 设置 → "
+                        + "勾选所需服务后重新申请 AK";
+            case NO_ADVANCED_PERMISSION:
+                return "检索的高级权限未开通（如行政区边界、深度检索），"
+                        + "请检查 AK 勾选的检索权限项";
+            case KEY_ERROR:
+                return "AK 无效，请检查 local.properties 里的 baiduMapAk，"
+                        + "并确认 AK 与包名 com.example.mymap、签名 SHA1 匹配";
+            case NETWORK_TIME_OUT:
+            case NETWORK_ERROR:
+                return "检索请求失败，请检查网络后重试";
+            case SEARCH_SERVER_INTERNAL_ERROR:
+                return "检索服务返回异常。若使用 http 协议在 Android 9+ 上会触发此错误，"
+                        + "请确认走的是 https";
+            case RESULT_NOT_FOUND:
+                return "没有找到匹配的地点，换个关键词试试";
+            case AMBIGUOUS_KEYWORD:
+                return "关键词过于模糊，请补充城市或更具体的名称";
+            case SEARCH_OPTION_ERROR:
+            case REQUEST_ERROR:
+                return "检索参数有误，请重试";
+            default:
+                return "检索失败：" + error;
+        }
     }
 }
