@@ -7,6 +7,7 @@
 | 模块 | 说明 |
 | --- | --- |
 | 地图与导航 | `MapActivity`：百度 `MapView` 展示底图 + 专业导航 View，支持真实导航与模拟导航 |
+| 终点选择 | 搜索地点名称出候选列表 / 长按地图选点 / 手动输入经纬度 |
 | SAEP 开关 | 查询平台级 SAEP 启用状态（`RobotsHelperStub.isRobotsEnabled`） |
 | 静态策略 | 预览 manifest 中 `com.obric.agentrobots.POLICY_JSON` 指向的策略 |
 | 动态策略 | 通过 `content://com.obric.agentrobots.provider/policy` 更新策略 |
@@ -32,6 +33,20 @@ baiduMapAk=你的百度地图AK
 
 AK 需要与**包名** `com.example.mymap` 和**签名 SHA1**匹配，否则地图与导航不可用。
 AK 通过 `manifestPlaceholders` 注入 manifest 的 `com.baidu.lbsapi.API_KEY`。
+
+> ⚠️ **地图能用不代表导航能用。** 百度在开放平台把「地图」和「驾车导航」分成
+> 独立的产品线，AK 必须**分别开通**。导航 SDK 初始化时会校验 AK 携带的权限位
+> （`SDK_KEY_AP`），没开通「驾车导航」时导航初始化会失败，常见错误码：
+>
+> | 错误码 | 含义 |
+> | --- | --- |
+> | 10 / 104 | 授权服务器返回的数据无法解析（通常是缺驾车导航权限） |
+> | 6 / 106 | 本地序列号校验不通过（AK 与包名或签名不匹配） |
+> | 8 / 107 | 本地激活码校验不通过 |
+> | 9 / 101 / 102 | 授权已过期或不可用 |
+> | 100 / 110 | 授权模块或参数错误 |
+>
+> 改完权限后需要**重新生成 AK**。
 
 启动时 `BaiduSdkInitializer` 会依次做三件事，缺一不可：
 
