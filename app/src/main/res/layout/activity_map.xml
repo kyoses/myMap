@@ -108,6 +108,13 @@
                 android:layout_weight="1"
                 android:text="定位" />
         </LinearLayout>
+
+        <Button
+            android:id="@+id/auth_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="查看 AK 授权状态" />
     </LinearLayout>
 
     <!-- 搜索结果列表，选中后作为终点 -->

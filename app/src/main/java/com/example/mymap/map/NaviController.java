@@ -207,9 +207,53 @@ final class NaviController {
             @Override
             public void onError(int errorCode, String message) {
                 Log.e(TAG, "loadAuth error: " + errorCode + " " + message);
-                callback.onInitFailed("导航授权失败 (" + errorCode + "): " + message);
+                callback.onInitFailed(describeLicenseError(errorCode, message));
             }
         });
+    }
+
+    /**
+     * 把授权服务（lbs_universal_sdk / multi_screen_navi）返回的错误码翻译成可读原因。
+     *
+     * <p>这套码来自 {@link IBNLicenseListener}，与 {@code onAuthResult} 里的授权码
+     * 是两套体系：前者是「授权服务」的结果，后者是「AK 授权」的结果。
+     */
+    private static String describeLicenseError(int code, String message) {
+        String detail = (message == null || message.trim().isEmpty()) ? "" : "：" + message;
+        switch (code) {
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_NO_ERROR:
+                return "导航授权成功";
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_NO_PERMISSION:
+                return "导航授权无权限（错误码 " + code + "）。该 AK 的「启动服务」里"
+                        + "没有勾选导航相关服务，请到百度地图开放平台 → 应用管理 → "
+                        + "我的应用 → 点击 AK 设置 → 勾选后重新申请 AK" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_PARAMETER_ERROR:
+                return "导航授权参数错误（错误码 " + code + "）。请检查 AK 是否填写正确" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_MODE_ERROR:
+                return "导航授权模式错误（错误码 " + code + "）" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_NO_QUOTA:
+                return "导航授权没有配额（错误码 " + code + "）。"
+                        + "请到开放平台确认该应用的配额是否已用完" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_QUOTA_NO_ENOUGH:
+                return "导航授权配额不足（错误码 " + code + "）" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_QUOTA_INVALID:
+                return "导航授权配额无效（错误码 " + code + "）" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_NETWORK_ERROR:
+                return "导航授权网络错误（错误码 " + code + "），请检查网络后重试" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_NETWORK_TIMEOUT:
+                return "导航授权网络超时（错误码 " + code + "）" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_SERVER_ERROR:
+                return "导航授权服务异常（错误码 " + code + "）" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_LICENSE_STATUS_ERROR:
+                return "导航授权状态异常（错误码 " + code + "）" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_LICENSE_SIGN_ERROR:
+                return "导航授权签名校验失败（错误码 " + code + "）。"
+                        + "请确认 AK 与包名 com.example.mymap、签名 SHA1 匹配" + detail;
+            case IBNLicenseListener.CODE_LICENSE_SERVICE_INNER_ERROR:
+                return "导航授权内部错误（错误码 " + code + "）" + detail;
+            default:
+                return "导航授权失败，错误码 " + code + detail;
+        }
     }
 
     /**
@@ -382,6 +426,33 @@ final class NaviController {
 
     boolean isInitialized() {
         return initialized;
+    }
+
+    /**
+     * 读取 AK 的实际授权状态，用于诊断。
+     *
+     * <p>SDK 会把 AK 携带的服务权限缓存下来，这里把关键的几项读出来，
+     * 便于确认「基础地图能用但导航/检索不可用」到底缺哪个服务。
+     *
+     * @return 多行文本，null 表示还读不到
+     */
+    static String describeAuthState() {
+        try {
+            com.baidu.navisdk.adapter.impl.base.BNaviAuthManager manager =
+                    com.baidu.navisdk.adapter.impl.base.BNaviAuthManager.getInstance();
+            StringBuilder sb = new StringBuilder();
+            sb.append("AK: ").append(manager.getAk()).append('\n');
+            sb.append("已授权: ").append(manager.isAuthSuccess()).append('\n');
+            sb.append("高清导航权限: ").append(manager.hasHdNaviPermission()).append('\n');
+            sb.append("货车权限: ").append(manager.hasTruckPermission()).append('\n');
+            sb.append("摩托车权限: ").append(manager.hasMotorPermission()).append('\n');
+            sb.append("新能源权限: ").append(manager.hasNewEnergyPermission()).append('\n');
+            sb.append("动态数据权限: ").append(manager.hasDynamicDataPermission()).append('\n');
+            return sb.toString();
+        } catch (Throwable t) {
+            Log.w(TAG, "读取授权状态失败", t);
+            return "读取授权状态失败：" + t.getMessage();
+        }
     }
 
     BNRoutePlanInfos getRoutePlanInfos() {

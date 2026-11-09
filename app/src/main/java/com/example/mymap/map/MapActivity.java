@@ -114,6 +114,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
         findViewById(R.id.locate_button).setOnClickListener(v -> requestLocation());
         findViewById(R.id.mock_button).setOnClickListener(v -> startMockNavigation());
         findViewById(R.id.search_button).setOnClickListener(v -> doSearch());
+        findViewById(R.id.auth_button).setOnClickListener(v -> showAuthState());
         searchInput.setOnEditorActionListener((v, actionId, event) -> {
             doSearch();
             return true;
@@ -277,6 +278,13 @@ public class MapActivity extends android.app.Activity implements NaviController.
             }
         });
         locationClient.start();
+    }
+
+    /** 显示 AK 的实际授权状态，便于确认缺哪个服务。 */
+    private void showAuthState() {
+        String state = NaviController.describeAuthState();
+        setStatus(state);
+        Toast.makeText(this, state, Toast.LENGTH_LONG).show();
     }
 
     /** 按输入框里的地点名称搜索候选，终点由用户在列表中选择。 */
