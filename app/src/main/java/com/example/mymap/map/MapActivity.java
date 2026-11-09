@@ -22,6 +22,7 @@ import com.baidu.location.LocationClientOption;
 import com.baidu.mapapi.map.BaiduMap;
 import com.baidu.mapapi.map.MapStatusUpdateFactory;
 import com.baidu.mapapi.map.MapView;
+import com.baidu.mapapi.map.MyLocationData;
 import com.baidu.mapapi.model.LatLng;
 import com.baidu.navisdk.adapter.BaiduNaviManagerFactory;
 import com.baidu.navisdk.adapter.IBNaviListener;
@@ -55,6 +56,8 @@ public class MapActivity extends android.app.Activity implements NaviController.
     private double currentLng = 116.39750;
     private String currentLocationName = "当前位置";
     private boolean mockNavigation;
+    /** 导航初始化失败的原因，null 表示还在初始化或已成功。 */
+    private String naviInitError;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,11 +104,38 @@ public class MapActivity extends android.app.Activity implements NaviController.
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT));
             baiduMap.setMapStatus(MapStatusUpdateFactory.zoomTo(15.0f));
+            // 打开定位图层，图上才会画出定位点与精度圈。
+            baiduMap.setMyLocationEnabled(true);
             return true;
         } catch (Throwable t) {
             setStatus("地图初始化失败：" + describe(t));
             startButton.setEnabled(false);
             return false;
+        }
+    }
+
+    /**
+     * 把定位结果交给地图的定位图层，这样才会在图上画出定位点与精度圈。
+     *
+     * <p>只移动地图中心是不够的 —— 定位图层需要单独 setMyLocationEnabled(true)
+     * 并喂给 MyLocationData，否则图上不会出现点位标记。
+     */
+    private void updateMyLocation(BDLocation location) {
+        if (baiduMap == null) {
+            return;
+        }
+        try {
+            MyLocationData data = new MyLocationData.Builder()
+                    .latitude(location.getLatitude())
+                    .longitude(location.getLongitude())
+                    .accuracy(location.getRadius())
+                    .direction(location.getDerect())
+                    .speed(location.getSpeed())
+                    .satellitesNum(location.getSatelliteNumber())
+                    .build();
+            baiduMap.setMyLocationData(data);
+        } catch (Throwable t) {
+            Log.w("MyMap", "更新定位图层失败", t);
         }
     }
 
@@ -192,6 +222,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
                         && !location.getLocationDescribe().isEmpty()) {
                     currentLocationName = location.getLocationDescribe();
                 }
+                updateMyLocation(location);
                 if (baiduMap != null) {
                     baiduMap.setMapStatus(
                             MapStatusUpdateFactory.newLatLngZoom(
@@ -219,6 +250,9 @@ public class MapActivity extends android.app.Activity implements NaviController.
                     Toast.LENGTH_SHORT).show();
             return;
         }
+        if (!ensureNaviReady()) {
+            return;
+        }
         mockNavigation = false;
         setStatus("正在规划路线...");
         naviController.planRoute(currentLat, currentLng, currentLocationName,
@@ -227,10 +261,27 @@ public class MapActivity extends android.app.Activity implements NaviController.
 
     /** 用默认终点进入模拟导航，用于在没有真实路线时验证导航界面。 */
     private void startMockNavigation() {
+        if (!ensureNaviReady()) {
+            return;
+        }
         mockNavigation = true;
         setStatus("正在规划路线...");
         naviController.planRoute(currentLat, currentLng, currentLocationName,
                 39.90882, 116.39750, "北京天安门");
+    }
+
+    /**
+     * 确认导航 SDK 已就绪，未就绪时给出具体原因而不是笼统的报错。
+     */
+    private boolean ensureNaviReady() {
+        if (naviController != null && naviController.isInitialized()) {
+            return true;
+        }
+        String reason = naviInitError != null ? naviInitError
+                : "导航 SDK 仍在初始化（需要联网授权），请稍候重试";
+        setStatus(reason);
+        Toast.makeText(this, reason, Toast.LENGTH_LONG).show();
+        return false;
     }
 
     private double[] parseCoordinate(String text) {
@@ -255,6 +306,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
 
     @Override
     public void onInitSuccess() {
+        naviInitError = null;
         setStatus("导航 SDK 初始化完成");
         String ak = readAk();
         if (!ak.isEmpty()) {
@@ -302,7 +354,9 @@ public class MapActivity extends android.app.Activity implements NaviController.
 
     @Override
     public void onInitFailed(String reason) {
+        naviInitError = reason;
         setStatus(reason);
+        Log.e("MyMap", "导航初始化失败: " + reason);
     }
 
     @Override

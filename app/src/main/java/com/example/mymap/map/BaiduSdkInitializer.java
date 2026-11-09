@@ -56,9 +56,12 @@ final class BaiduSdkInitializer {
         }
 
         try {
-            SDKInitializer.initialize(appContext);
-            initialized = true;
-            Log.i(TAG, "百度地图 SDK 初始化完成");
+            // 带 listener 的重载会在原生库真正加载完成后回调 initializerFinish，
+            // 单参重载在原生库缺失时也不会抛异常，只会把错误写进 logcat。
+            SDKInitializer.initialize(appContext, () -> {
+                initialized = true;
+                Log.i(TAG, "百度地图 SDK 初始化完成");
+            });
         } catch (Throwable t) {
             Log.e(TAG, "SDKInitializer.initialize 失败", t);
         }
