@@ -18,6 +18,48 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="#E6FFFFFF"
+        android:orientation="vertical"
+        android:padding="10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/search_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="搜索地点，如 天安门"
+                android:imeOptions="actionSearch"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/search_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="搜索" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/hint_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:text="长按地图可选择终点"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:background="#E6FFFFFF"
         android:orientation="vertical"
@@ -31,15 +73,14 @@
             android:text="正在初始化..."
             android:textSize="14sp" />
 
-        <EditText
-            android:id="@+id/destination_input"
+        <TextView
+            android:id="@+id/destination_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="终点坐标 纬度,经度"
-            android:importantForAutofill="no"
-            android:inputType="text"
-            android:singleLine="true"
-            android:textSize="14sp" />
+            android:paddingBottom="6dp"
+            android:text="终点：未选择"
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -68,4 +109,15 @@
                 android:text="定位" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- 搜索结果列表，选中后作为终点 -->
+    <ListView
+        android:id="@+id/result_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginTop="80dp"
+        android:layout_marginBottom="160dp"
+        android:background="#F2FFFFFF"
+        android:visibility="gone" />
 </FrameLayout>

@@ -5,9 +5,11 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,8 +22,12 @@ import com.baidu.location.BDLocation;
 import com.baidu.location.LocationClient;
 import com.baidu.location.LocationClientOption;
 import com.baidu.mapapi.map.BaiduMap;
+import com.baidu.mapapi.map.BitmapDescriptor;
+import com.baidu.mapapi.map.BitmapDescriptorFactory;
 import com.baidu.mapapi.map.MapStatusUpdateFactory;
 import com.baidu.mapapi.map.MapView;
+import com.baidu.mapapi.map.Marker;
+import com.baidu.mapapi.map.MarkerOptions;
 import com.baidu.mapapi.map.MyLocationData;
 import com.baidu.mapapi.model.LatLng;
 import com.baidu.navisdk.adapter.BaiduNaviManagerFactory;
@@ -49,7 +55,11 @@ public class MapActivity extends android.app.Activity implements NaviController.
     private FrameLayout mapContainer;
     private FrameLayout naviContainer;
     private TextView statusView;
-    private EditText destinationInput;
+    private TextView destinationText;
+    private TextView hintText;
+    private EditText searchInput;
+    private ListView resultList;
+    private ArrayAdapter<String> resultAdapter;
     private Button startButton;
 
     private double currentLat = 39.90882;
@@ -58,6 +68,13 @@ public class MapActivity extends android.app.Activity implements NaviController.
     private boolean mockNavigation;
     /** 导航初始化失败的原因，null 表示还在初始化或已成功。 */
     private String naviInitError;
+    /** 已选择的终点坐标，null 表示还没选。 */
+    private LatLng destination;
+    private String destinationName = "";
+    /** 搜索结果与列表显示文本一一对应。 */
+    private final List<PoiSearchHelper.Poi> searchResults = new ArrayList<>();
+    /** 地图上的终点标记。 */
+    private Marker destinationMarker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,8 +84,22 @@ public class MapActivity extends android.app.Activity implements NaviController.
         mapContainer = findViewById(R.id.map_container);
         naviContainer = findViewById(R.id.navi_container);
         statusView = findViewById(R.id.status_text);
-        destinationInput = findViewById(R.id.destination_input);
+        destinationText = findViewById(R.id.destination_text);
+        hintText = findViewById(R.id.hint_text);
+        searchInput = findViewById(R.id.search_input);
+        resultList = findViewById(R.id.result_list);
         startButton = findViewById(R.id.start_button);
+
+        resultAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_list_item_1, new ArrayList<>());
+        resultList.setAdapter(resultAdapter);
+        resultList.setOnItemClickListener((parent, view, position, id) -> {
+            if (position >= 0 && position < searchResults.size()) {
+                selectDestination(searchResults.get(position).location,
+                        searchResults.get(position).name);
+                hideResultList();
+            }
+        });
 
         if (!initMap()) {
             return;
@@ -82,6 +113,11 @@ public class MapActivity extends android.app.Activity implements NaviController.
         startButton.setOnClickListener(v -> planAndNavigate());
         findViewById(R.id.locate_button).setOnClickListener(v -> requestLocation());
         findViewById(R.id.mock_button).setOnClickListener(v -> startMockNavigation());
+        findViewById(R.id.search_button).setOnClickListener(v -> doSearch());
+        searchInput.setOnEditorActionListener((v, actionId, event) -> {
+            doSearch();
+            return true;
+        });
 
         requestLocation();
     }
@@ -106,6 +142,8 @@ public class MapActivity extends android.app.Activity implements NaviController.
             baiduMap.setMapStatus(MapStatusUpdateFactory.zoomTo(15.0f));
             // 打开定位图层，图上才会画出定位点与精度圈。
             baiduMap.setMyLocationEnabled(true);
+            // 长按地图选择终点。
+            baiduMap.setOnMapLongClickListener(point -> onMapLongClick(point));
             return true;
         } catch (Throwable t) {
             setStatus("地图初始化失败：" + describe(t));
@@ -241,13 +279,94 @@ public class MapActivity extends android.app.Activity implements NaviController.
         locationClient.start();
     }
 
-    /** 用输入框里的终点（"纬度,经度"）算路并进入导航。 */
+    /** 按输入框里的地点名称搜索候选，终点由用户在列表中选择。 */
+    private void doSearch() {
+        String keyword = searchInput.getText().toString().trim();
+        if (keyword.isEmpty()) {
+            Toast.makeText(this, "请输入地点名称", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setStatus("正在搜索「" + keyword + "」...");
+        PoiSearchHelper.search(keyword, "", new PoiSearchHelper.Callback<>() {
+            @Override
+            public void onSuccess(List<PoiSearchHelper.Poi> pois) {
+                searchResults.clear();
+                searchResults.addAll(pois);
+                resultAdapter.clear();
+                for (PoiSearchHelper.Poi poi : pois) {
+                    resultAdapter.add(poi.toString());
+                }
+                resultAdapter.notifyDataSetChanged();
+                resultList.setVisibility(View.VISIBLE);
+                setStatus("找到 " + pois.size() + " 个结果，点选一个作为终点");
+            }
+
+            @Override
+            public void onFailure(String reason) {
+                hideResultList();
+                setStatus("搜索失败：" + reason);
+                Toast.makeText(MapActivity.this, "搜索失败：" + reason,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    /** 长按地图选点：反向解析出地址后作为终点。 */
+    private void onMapLongClick(LatLng point) {
+        if (point == null) {
+            return;
+        }
+        setStatus("正在解析该点地址...");
+        PoiSearchHelper.reverseGeocode(point, new PoiSearchHelper.Callback<>() {
+            @Override
+            public void onSuccess(String address) {
+                selectDestination(point, address);
+                setStatus("已选择终点：" + address);
+            }
+
+            @Override
+            public void onFailure(String reason) {
+                // 解析不出地址也允许直接用坐标当终点。
+                selectDestination(point, "地图选点");
+                setStatus("已选择该点（" + reason + "）");
+            }
+        });
+    }
+
+    /** 设定终点并在地图上打标记。 */
+    private void selectDestination(LatLng point, String name) {
+        if (point == null) {
+            return;
+        }
+        destination = point;
+        destinationName = name == null ? "" : name;
+        destinationText.setText("终点：" + destinationName
+                + (destinationName.isEmpty() ? "" : "（" + point.latitude + ", "
+                + point.longitude + "）"));
+
+        if (baiduMap != null) {
+            if (destinationMarker != null) {
+                destinationMarker.remove();
+            }
+            MarkerOptions options = new MarkerOptions()
+                    .position(point)
+                    .title(destinationName)
+                    .icon(BitmapDescriptorFactory.fromResource(
+                            R.drawable.ic_map_destination));
+            destinationMarker = (Marker) baiduMap.addOverlay(options);
+            baiduMap.setMapStatus(MapStatusUpdateFactory.newLatLngZoom(point, 16.0f));
+        }
+    }
+
+    private void hideResultList() {
+        resultList.setVisibility(View.GONE);
+    }
+
+    /** 用已选择的终点算路并进入导航。 */
     private void planAndNavigate() {
-        String text = destinationInput.getText().toString().trim();
-        double[] target = parseCoordinate(text);
-        if (target == null) {
-            Toast.makeText(this, "终点格式应为 纬度,经度，例如 39.90882,116.39750",
-                    Toast.LENGTH_SHORT).show();
+        if (destination == null) {
+            Toast.makeText(this, "请先选择终点：搜索地点，或长按地图选点",
+                    Toast.LENGTH_LONG).show();
             return;
         }
         if (!ensureNaviReady()) {
@@ -256,18 +375,26 @@ public class MapActivity extends android.app.Activity implements NaviController.
         mockNavigation = false;
         setStatus("正在规划路线...");
         naviController.planRoute(currentLat, currentLng, currentLocationName,
-                target[0], target[1], "终点");
+                destination.latitude, destination.longitude,
+                destinationName.isEmpty() ? "终点" : destinationName);
     }
 
-    /** 用默认终点进入模拟导航，用于在没有真实路线时验证导航界面。 */
+    /** 进入模拟导航，用于在没有真实路线时验证导航界面。 */
     private void startMockNavigation() {
         if (!ensureNaviReady()) {
             return;
         }
         mockNavigation = true;
         setStatus("正在规划路线...");
-        naviController.planRoute(currentLat, currentLng, currentLocationName,
-                39.90882, 116.39750, "北京天安门");
+        if (destination != null) {
+            naviController.planRoute(currentLat, currentLng, currentLocationName,
+                    destination.latitude, destination.longitude,
+                    destinationName.isEmpty() ? "终点" : destinationName);
+        } else {
+            // 没选终点时用默认的天安门，保证模拟导航仍能跑通。
+            naviController.planRoute(currentLat, currentLng, currentLocationName,
+                    39.90882, 116.39750, "北京天安门");
+        }
     }
 
     /**
@@ -282,26 +409,6 @@ public class MapActivity extends android.app.Activity implements NaviController.
         setStatus(reason);
         Toast.makeText(this, reason, Toast.LENGTH_LONG).show();
         return false;
-    }
-
-    private double[] parseCoordinate(String text) {
-        if (text.isEmpty()) {
-            return null;
-        }
-        String[] parts = text.split(",");
-        if (parts.length != 2) {
-            return null;
-        }
-        try {
-            double lat = Double.parseDouble(parts[0].trim());
-            double lng = Double.parseDouble(parts[1].trim());
-            if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-                return null;
-            }
-            return new double[]{lat, lng};
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     @Override

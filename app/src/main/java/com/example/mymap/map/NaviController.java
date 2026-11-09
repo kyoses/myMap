@@ -110,7 +110,7 @@ final class NaviController {
                     @Override
                     public void initFailed(int errorCode) {
                         Log.e(TAG, "navi init failed: " + errorCode);
-                        callback.onInitFailed("导航初始化失败，错误码 " + errorCode);
+                        callback.onInitFailed(describeInitError(errorCode));
                     }
                 })
                 .build();
@@ -131,6 +131,58 @@ final class NaviController {
                 return "导航授权失败，错误码 " + code
                         + "。若地图能用但导航不可用，通常是该 AK 未开通「驾车导航」权限，"
                         + "需要在百度地图开放平台为应用勾选该权限" + detail;
+        }
+    }
+
+    /**
+     * 把引擎初始化错误码翻译成可读原因。
+     *
+     * <p>这些码来自 {@code com.baidu.navisdk.api.common.error.c}，是**导航授权**
+     * 相关的一组：地图能用不代表导航授权能通过。
+     */
+    private static String describeInitError(int code) {
+        switch (code) {
+            case 6:
+                return "导航授权失败：本地序列号校验不通过（错误码 "
+                        + code + "）。请确认 AK 与包名、签名 SHA1 一致";
+            case 7:
+                return "导航授权失败：生成安装码失败（错误码 " + code + "）";
+            case 8:
+                return "导航授权失败：本地激活码校验不通过（错误码 " + code + "）";
+            case 9:
+                return "导航授权失败：本地授权已过期或不可用（错误码 " + code + "）";
+            case 10:
+                return "导航授权失败：授权服务器返回的数据无法解析（错误码 " + code
+                        + "）。通常是该 AK 未开通「驾车导航」权限，"
+                        + "请到百度地图开放平台为应用勾选该权限后重新生成 AK";
+            case 11:
+                return "导航授权失败：授权数据异常（错误码 " + code + "）";
+            case 100:
+                return "导航授权失败：授权模块错误（错误码 " + code + "）";
+            case 101:
+                return "导航授权失败：授权已过期或不可用（错误码 " + code + "）";
+            case 102:
+                return "导航授权失败：本地授权已过期或不可用（错误码 " + code + "）";
+            case 103:
+                return "导航授权失败：本地授权参数错误（错误码 " + code + "）";
+            case 104:
+                return "导航授权失败：授权服务器返回的数据无法解析（错误码 " + code
+                        + "）。通常是该 AK 未开通「驾车导航」权限";
+            case 105:
+                return "导航授权失败：生成安装码失败（错误码 " + code + "）";
+            case 106:
+                return "导航授权失败：本地序列号校验不通过（错误码 " + code + "）";
+            case 107:
+                return "导航授权失败：本地激活码校验不通过（错误码 " + code + "）";
+            case 108:
+                return "导航授权失败：授权文件写入失败（错误码 " + code + "）";
+            case 109:
+                return "导航授权失败：授权文件读取失败（错误码 " + code + "）";
+            case 110:
+                return "导航授权失败：授权参数错误（错误码 " + code + "）";
+            default:
+                return "导航初始化失败，错误码 " + code
+                        + "。若地图可用但导航不可用，通常是该 AK 未开通「驾车导航」权限";
         }
     }
 

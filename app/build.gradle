@@ -83,6 +83,8 @@ configurations.configureEach {
 dependencies {
     // 驾车导航组件（含地图能力）
     implementation 'com.baidu.lbsyun:BaiduMapSDK_Map-Navi:8.2.0.2'
+    // 检索组件：POI 检索与地理编码，用于地点搜索和地图选点
+    implementation 'com.baidu.lbsyun:BaiduMapSDK_Search:8.2.0.2'
     // 基础定位组件（与 Location_All 二选一）
     implementation 'com.baidu.lbsyun:BaiduMapSDK_Location:9.6.5.1'
     // 导航内部 Glide 适配层（与 Glide 4.x 配套）
