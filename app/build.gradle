@@ -16,16 +16,24 @@ def resolveSecret = { String name ->
             (project.hasProperty(name) ? project.property(name) : '')
 }
 
-// 百度地图 AK 必填：没有它底图能画出来，但检索、地理编码、导航都会被服务端拒绝
+// 百度地图 AK：没有它底图能画出来，但检索、地理编码、导航都会被服务端拒绝
 // （检索返回 PERMISSION_UNFINISHED，导航初始化返回错误码 10），而且这种问题
-// 只在真机上才暴露，很难排查。所以在编译期就拦下来。
+// 只在真机上才暴露，很难排查。所以在编译期就提醒。
+//
+// 但不能直接让构建失败：CI 上没有密钥（BAIDU_MAP_AK 是可选的仓库 secret），
+// 那样 CI 会永远红着。改成只有本地构建才当作错误，CI 上仅告警。
 def baiduMapAk = resolveSecret('baiduMapAk')
+def isCi = System.getenv('CI') != null || System.getenv('GITHUB_ACTIONS') == 'true'
 if (!baiduMapAk?.trim()) {
-    throw new GradleException(
-            "缺少百度地图 AK。请在 local.properties 里添加一行：\n" +
+    def akHint = "缺少百度地图 AK。请在 local.properties 里添加一行：\n" +
             "  baiduMapAk=你的AK\n" +
             "（local.properties 不入库；AK 需与包名 com.example.mymap 和签名 SHA1 匹配，" +
-            "且在开放平台的「启动服务」里勾选了检索与驾车导航）")
+            "且在开放平台的「启动服务」里勾选了检索与驾车导航）"
+    if (isCi) {
+        logger.warn("CI 构建跳过 AK 校验：${akHint}")
+    } else {
+        throw new GradleException(akHint)
+    }
 }
 
 android {

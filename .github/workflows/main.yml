@@ -84,12 +84,16 @@ jobs:
     # 6. 注入百度地图 AK（未配置 secret 时留空，不影响编译）
     - name: Configure Baidu Map AK
       run: |
-        echo "baiduMapAk=${{ secrets.BAIDU_MAP_AK }}" >> gradle.properties
-        echo "baiduTtsAppId=${{ secrets.BAIDU_TTS_APP_ID }}" >> gradle.properties
-        echo "baiduTtsAppKey=${{ secrets.BAIDU_TTS_APP_KEY }}" >> gradle.properties
-        echo "baiduTtsSecretKey=${{ secrets.BAIDU_TTS_SECRET_KEY }}" >> gradle.properties
-        echo "baiduTtsAuthSn=${{ secrets.BAIDU_TTS_AUTH_SN }}" >> gradle.properties
-        cat gradle.properties
+        # 密钥写进 local.properties（已 gitignore），不要写 gradle.properties，
+        # 那样会被提交到仓库；也避免 cat 出来打进构建日志。
+        {
+          echo "baiduMapAk=${{ secrets.BAIDU_MAP_AK }}"
+          echo "baiduTtsAppId=${{ secrets.BAIDU_TTS_APP_ID }}"
+          echo "baiduTtsAppKey=${{ secrets.BAIDU_TTS_APP_KEY }}"
+          echo "baiduTtsSecretKey=${{ secrets.BAIDU_TTS_SECRET_KEY }}"
+          echo "baiduTtsAuthSn=${{ secrets.BAIDU_TTS_AUTH_SN }}"
+        } >> local.properties
+        echo "local.properties 已写入（内容不打印）"
 
     # 7. 编译 Debug APK
     #    百度地图 SDK 不支持 x86/x86_64，模拟器上只有 arm64 与 armv7 架构可用
