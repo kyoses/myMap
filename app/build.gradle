@@ -16,6 +16,18 @@ def resolveSecret = { String name ->
             (project.hasProperty(name) ? project.property(name) : '')
 }
 
+// 百度地图 AK 必填：没有它底图能画出来，但检索、地理编码、导航都会被服务端拒绝
+// （检索返回 PERMISSION_UNFINISHED，导航初始化返回错误码 10），而且这种问题
+// 只在真机上才暴露，很难排查。所以在编译期就拦下来。
+def baiduMapAk = resolveSecret('baiduMapAk')
+if (!baiduMapAk?.trim()) {
+    throw new GradleException(
+            "缺少百度地图 AK。请在 local.properties 里添加一行：\n" +
+            "  baiduMapAk=你的AK\n" +
+            "（local.properties 不入库；AK 需与包名 com.example.mymap 和签名 SHA1 匹配，" +
+            "且在开放平台的「启动服务」里勾选了检索与驾车导航）")
+}
+
 android {
     namespace 'com.example.mymap'
     compileSdk 35
@@ -29,7 +41,7 @@ android {
 
         // 百度地图 AK 与 TTS 授权参数通过 manifestPlaceholders 注入，避免把密钥写死在源码里。
         manifestPlaceholders = [
-                BAIDU_MAP_AK        : resolveSecret('baiduMapAk'),
+                BAIDU_MAP_AK        : baiduMapAk,
                 BAIDU_TTS_APP_ID    : resolveSecret('baiduTtsAppId'),
                 BAIDU_TTS_APP_KEY   : resolveSecret('baiduTtsAppKey'),
                 BAIDU_TTS_SECRET_KEY: resolveSecret('baiduTtsSecretKey'),

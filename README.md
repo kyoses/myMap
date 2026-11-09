@@ -29,7 +29,10 @@ sdk.dir=C:/Users/kyozq/AppData/Local/Android/Sdk
 baiduMapAk=你的百度地图AK
 ```
 
-> 注意：`gradle.properties` 会被提交到 GitHub，不能用来放 AK。
+也可以用 `-PbaiduMapAk=xxx` 传入。**没有 AK 时构建会直接失败**并提示如何配置 ——
+因为无 AK 时底图照样能画出来，但检索、地理编码、导航都会被服务端拒绝
+（检索返回 `PERMISSION_UNFINISHED`、导航初始化返回错误码 10），这种问题只在真机上
+才暴露，排查成本很高。
 
 AK 需要与**包名** `com.example.mymap` 和**签名 SHA1**匹配，否则地图与导航不可用。
 AK 通过 `manifestPlaceholders` 注入 manifest 的 `com.baidu.lbsapi.API_KEY`。

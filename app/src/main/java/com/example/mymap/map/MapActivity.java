@@ -290,7 +290,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
     private void showAuthState() {
         String state;
         try {
-            state = NaviController.describeAuthState();
+            state = NaviController.describeAuthState(this);
         } catch (Throwable t) {
             state = "读取授权状态失败：" + describe(t);
         }

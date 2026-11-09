@@ -1,6 +1,7 @@
 package com.example.mymap.map;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -465,17 +466,21 @@ final class NaviController {
      *
      * @return 多行文本，null 表示还读不到
      */
-    static String describeAuthState() {
+    static String describeAuthState(Context context) {
+        StringBuilder sb = new StringBuilder();
+        // manifest 里的 AK 才是真正生效的那个，导航 SDK 缓存的是授权后的结果，
+        // 授权没成功时会是空，两者不一致正好能说明问题。
+        sb.append("manifest 中的 AK: ").append(readAkFromManifest(context)).append('\n');
         if (!isNaviNativeAvailable()) {
-            return "当前设备架构（" + Build.SUPPORTED_ABIS[0]
-                    + "）没有百度导航的原生库，读不到导航授权状态。"
-                    + "检索与地图功能不受影响。";
+            sb.append("当前设备架构（").append(Build.SUPPORTED_ABIS[0])
+                    .append("）没有百度导航的原生库，读不到导航授权状态。")
+                    .append("检索与地图功能不受影响。");
+            return sb.toString();
         }
         try {
             com.baidu.navisdk.adapter.impl.base.BNaviAuthManager manager =
                     com.baidu.navisdk.adapter.impl.base.BNaviAuthManager.getInstance();
-            StringBuilder sb = new StringBuilder();
-            sb.append("AK: ").append(manager.getAk()).append('\n');
+            sb.append("导航缓存的 AK: ").append(manager.getAk()).append('\n');
             sb.append("已授权: ").append(manager.isAuthSuccess()).append('\n');
             sb.append("高清导航权限: ").append(manager.hasHdNaviPermission()).append('\n');
             sb.append("货车权限: ").append(manager.hasTruckPermission()).append('\n');
@@ -485,7 +490,31 @@ final class NaviController {
             return sb.toString();
         } catch (Throwable t) {
             Log.w(TAG, "读取授权状态失败", t);
-            return "读取授权状态失败：" + t.getMessage();
+            return sb.append("读取导航授权状态失败：").append(t.getMessage()).toString();
+        }
+    }
+
+    /** 从 manifest 的 meta-data 里读 AK，这是真正生效的那个。 */
+    static String readAkFromManifest(Context context) {
+        try {
+            android.content.pm.ApplicationInfo info = context.getPackageManager()
+                    .getApplicationInfo(context.getPackageName(),
+                            android.content.pm.PackageManager.GET_META_DATA);
+            if (info.metaData == null) {
+                return "(manifest 没有 meta-data)";
+            }
+            Object value = info.metaData.get("com.baidu.lbsapi.API_KEY");
+            if (value == null) {
+                return "(manifest 里没有 com.baidu.lbsapi.API_KEY)";
+            }
+            String ak = value.toString().trim();
+            if (ak.isEmpty()) {
+                return "(空！local.properties 里没有配置 baiduMapAk)";
+            }
+            return ak.length() > 8 ? ak.substring(0, 4) + "…" + ak.substring(ak.length() - 4)
+                    : ak;
+        } catch (Exception e) {
+            return "(读取失败: " + e.getMessage() + ")";
         }
     }
 
