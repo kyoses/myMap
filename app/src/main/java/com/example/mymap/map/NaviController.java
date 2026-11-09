@@ -1,6 +1,7 @@
 package com.example.mymap.map;
 
 import android.app.Activity;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -82,6 +83,15 @@ final class NaviController {
         if (initialized) {
             return;
         }
+        if (!isNaviNativeAvailable()) {
+            // 导航引擎的原生库只提供 arm64-v8a / armeabi-v7a。在 x86 设备上
+            // SDK 会在自己的 Nav-Auth 线程里 loadLibrary 失败，且不捕获异常，
+            // 会直接把整个进程带崩。这里提前挡住，只提示不初始化。
+            Log.w(TAG, "当前设备架构没有导航原生库，跳过导航初始化");
+            callback.onInitFailed("当前设备架构（" + Build.SUPPORTED_ABIS[0]
+                    + "）没有百度导航的原生库，导航不可用；请在 ARM 真机上使用");
+            return;
+        }
         naviManager = BaiduNaviManagerFactory.getBaiduNaviManager();
         routeGuideManager = BaiduNaviManagerFactory.getRouteGuideManager();
 
@@ -132,6 +142,25 @@ final class NaviController {
                         + "。若地图能用但导航不可用，通常是该 AK 未开通「驾车导航」权限，"
                         + "需要在百度地图开放平台为应用勾选该权限" + detail;
         }
+    }
+
+    /**
+     * 导航引擎的原生库是否可用。
+     *
+     * <p>百度 maven 版导航 SDK 只提供 arm64-v8a 与 armeabi-v7a 两个架构。
+     * 在 x86/x86_64 设备上 SDK 的授权线程会直接 loadLibrary 失败且不捕获异常，
+     * 导致进程崩溃，所以这里提前判断。
+     */
+    private static boolean isNaviNativeAvailable() {
+        if (Build.SUPPORTED_ABIS == null || Build.SUPPORTED_ABIS.length == 0) {
+            return false;
+        }
+        for (String abi : Build.SUPPORTED_ABIS) {
+            if ("arm64-v8a".equals(abi) || "armeabi-v7a".equals(abi)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -437,6 +466,11 @@ final class NaviController {
      * @return 多行文本，null 表示还读不到
      */
     static String describeAuthState() {
+        if (!isNaviNativeAvailable()) {
+            return "当前设备架构（" + Build.SUPPORTED_ABIS[0]
+                    + "）没有百度导航的原生库，读不到导航授权状态。"
+                    + "检索与地图功能不受影响。";
+        }
         try {
             com.baidu.navisdk.adapter.impl.base.BNaviAuthManager manager =
                     com.baidu.navisdk.adapter.impl.base.BNaviAuthManager.getInstance();

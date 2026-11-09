@@ -101,15 +101,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
             }
         });
 
-        if (!initMap()) {
-            return;
-        }
-
-        naviController = new NaviController(this, this);
-        // sdcardRootPath 是引擎数据目录名，SDK 内部用 getExternalFilesDir(name)
-        // 拼到应用私有外部目录下；传绝对路径会导致目录层级异常。
-        naviController.init("BaiduNavi");
-
+        // 先把控件的监听器都接上，即使地图初始化失败，检索与诊断功能仍然可用。
         startButton.setOnClickListener(v -> planAndNavigate());
         findViewById(R.id.locate_button).setOnClickListener(v -> requestLocation());
         findViewById(R.id.mock_button).setOnClickListener(v -> startMockNavigation());
@@ -120,7 +112,21 @@ public class MapActivity extends android.app.Activity implements NaviController.
             return true;
         });
 
+        if (!initMap()) {
+            // 地图不可用时仍要初始化导航控制器，否则生命周期里会空指针。
+            initNaviController();
+            return;
+        }
+
+        initNaviController();
         requestLocation();
+    }
+
+    private void initNaviController() {
+        naviController = new NaviController(this, this);
+        // sdcardRootPath 是引擎数据目录名，SDK 内部用 getExternalFilesDir(name)
+        // 拼到应用私有外部目录下；传绝对路径会导致目录层级异常。
+        naviController.init("BaiduNavi");
     }
 
     /**
@@ -282,7 +288,12 @@ public class MapActivity extends android.app.Activity implements NaviController.
 
     /** 显示 AK 的实际授权状态，便于确认缺哪个服务。 */
     private void showAuthState() {
-        String state = NaviController.describeAuthState();
+        String state;
+        try {
+            state = NaviController.describeAuthState();
+        } catch (Throwable t) {
+            state = "读取授权状态失败：" + describe(t);
+        }
         setStatus(state);
         Toast.makeText(this, state, Toast.LENGTH_LONG).show();
     }
