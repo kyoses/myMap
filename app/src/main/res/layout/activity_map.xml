@@ -55,6 +55,40 @@
             android:paddingTop="4dp"
             android:text="长按地图可选择终点"
             android:textSize="12sp" />
+
+        <!-- AK 输入区放在顶部：底部面板在小屏手机上会顶到系统导航栏，
+             那里放按钮点不准。 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/ak_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="运行时修改 AK"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/ak_apply_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="应用" />
+
+            <Button
+                android:id="@+id/ak_check_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="校验" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout

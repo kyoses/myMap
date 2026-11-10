@@ -29,13 +29,21 @@ sdk.dir=C:/Users/kyozq/AppData/Local/Android/Sdk
 baiduMapAk=你的百度地图AK
 ```
 
-也可以用 `-PbaiduMapAk=xxx` 传入。**本地构建没有 AK 会直接失败**并提示如何配置 ——
-因为无 AK 时底图照样能画出来，但检索、地理编码、导航都会被服务端拒绝
-（检索返回 `PERMISSION_UNFINISHED`、导航初始化返回错误码 10），这种问题只在真机上
-才暴露，排查成本很高。
+也可以用 `-PbaiduMapAk=xxx` 传入。**缺 AK 时构建只告警不中断** —— 无 AK 时底图照样
+能画出来，但检索、地理编码、导航都会被服务端拒绝（检索返回 `PERMISSION_UNFINISHED`、
+导航初始化返回错误码 10），所以要留意构建日志里的告警。
 
-CI 上不强制：仓库 secret `BAIDU_MAP_AK` 是可选的，缺失时只告警不中断构建
-（判断依据是环境变量 `CI` / `GITHUB_ACTIONS`）。
+### 运行时修改 AK
+
+地图页面底部有「运行时修改 AK」输入框，可以直接换一个 AK，不用重新打包：
+
+- 输入框的值会存在 SharedPreferences，**优先于 manifest 里的 AK**；
+- 应用时会同时设置地图 SDK 的 `SDKInitializer.setApiKey` 和检索/定位 SDK 读的
+  `LBSAuthManager.setKey`；
+- 清空输入框并保存可以恢复成 manifest 里的 AK。
+
+用途：换一个应用（比如另一个包名/签名下的 AK）时快速对比，或者临时验证某个 AK 是否
+勾选了对应服务。改完 AK 后建议重启应用，让地图与检索 SDK 重新初始化。
 
 AK 需要与**包名** `com.example.mymap` 和**签名 SHA1**匹配，否则地图与导航不可用。
 AK 通过 `manifestPlaceholders` 注入 manifest 的 `com.baidu.lbsapi.API_KEY`。

@@ -58,6 +58,7 @@ public class MapActivity extends android.app.Activity implements NaviController.
     private TextView destinationText;
     private TextView hintText;
     private EditText searchInput;
+    private EditText akInput;
     private ListView resultList;
     private ArrayAdapter<String> resultAdapter;
     private Button startButton;
@@ -87,6 +88,8 @@ public class MapActivity extends android.app.Activity implements NaviController.
         destinationText = findViewById(R.id.destination_text);
         hintText = findViewById(R.id.hint_text);
         searchInput = findViewById(R.id.search_input);
+        akInput = findViewById(R.id.ak_input);
+        akInput.setText(AkManager.getUserAk(this));
         resultList = findViewById(R.id.result_list);
         startButton = findViewById(R.id.start_button);
 
@@ -107,6 +110,8 @@ public class MapActivity extends android.app.Activity implements NaviController.
         findViewById(R.id.mock_button).setOnClickListener(v -> startMockNavigation());
         findViewById(R.id.search_button).setOnClickListener(v -> doSearch());
         findViewById(R.id.auth_button).setOnClickListener(v -> showAuthState());
+        findViewById(R.id.ak_check_button).setOnClickListener(v -> checkAkServices());
+        findViewById(R.id.ak_apply_button).setOnClickListener(v -> applyAkFromInput());
         searchInput.setOnEditorActionListener((v, actionId, event) -> {
             doSearch();
             return true;
@@ -296,6 +301,56 @@ public class MapActivity extends android.app.Activity implements NaviController.
         }
         setStatus(state);
         Toast.makeText(this, state, Toast.LENGTH_LONG).show();
+    }
+
+    /**
+     * 问百度服务端：这个 AK 有效吗、能调哪些服务。
+     *
+     * <p>SDK 把服务端的错误都折叠成 PERMISSION_UNFINISHED，分不清「AK 不存在」
+     * 「应用类型不对」还是「没勾选服务」。这里直接调 Web API 拿原始 message。
+     */
+    private void checkAkServices() {
+        final String ak = readAk();
+        setStatus("正在向百度服务端校验 AK...");
+        new Thread(() -> {
+            final String[] result = new String[1];
+            try {
+                result[0] = AkValidator.check(ak);
+            } catch (Throwable t) {
+                result[0] = "校验失败：" + t.getClass().getSimpleName() + " " + t.getMessage();
+            }
+            final String text = result[0];
+            runOnUiThread(() -> {
+                setStatus(text);
+                Toast.makeText(this, text, Toast.LENGTH_LONG).show();
+            });
+        }).start();
+    }
+
+    /** 应用输入框里的 AK。 */
+    private void applyAkFromInput() {
+        String ak = akInput.getText().toString().trim();
+        if (ak.isEmpty()) {
+            Toast.makeText(this, "请输入 AK；清空可恢复成 manifest 里的 AK",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String error = AkManager.applyAk(this, ak);
+        if (error != null) {
+            setStatus("设置 AK 失败：" + error);
+            Toast.makeText(this, "设置 AK 失败：" + error, Toast.LENGTH_LONG).show();
+            return;
+        }
+        AkManager.setUserAk(this, ak);
+        setStatus("已应用新 AK：" + maskAk(ak) + "，重新搜索或重启应用生效");
+        Toast.makeText(this, "已应用新 AK", Toast.LENGTH_SHORT).show();
+    }
+
+    private static String maskAk(String ak) {
+        if (ak == null || ak.length() <= 8) {
+            return ak;
+        }
+        return ak.substring(0, 4) + "…" + ak.substring(ak.length() - 4);
     }
 
     /** 按输入框里的地点名称搜索候选，终点由用户在列表中选择。 */
@@ -533,17 +588,9 @@ public class MapActivity extends android.app.Activity implements NaviController.
         runOnUiThread(() -> statusView.setText(text));
     }
 
-    /** 从 Manifest 的 meta-data 里读取百度地图 AK。 */
+    /** 当前生效的 AK：优先用户在应用内设置的，其次 manifest 里的。 */
     private String readAk() {
-        try {
-            android.content.pm.ApplicationInfo info = getPackageManager()
-                    .getApplicationInfo(getPackageName(),
-                            android.content.pm.PackageManager.GET_META_DATA);
-            Object value = info.metaData.get("com.baidu.lbsapi.API_KEY");
-            return value == null ? "" : value.toString();
-        } catch (Exception e) {
-            return "";
-        }
+        return AkManager.effectiveAk(this);
     }
 
     @Override
